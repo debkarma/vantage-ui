@@ -1,0 +1,29 @@
+---
+title: Watch Mode
+description: Run Vantage continuously for a seamless Test-Driven Development (TDD) workflow.
+---
+
+Vantage provides a Watch Mode that automatically re-runs your test suite whenever you save a file. This gives you instant feedback on whether your code changes broke any existing API contracts.
+
+## Starting Watch Mode
+
+To enable watch mode, append the `--watch` flag to your test command:
+
+```bash
+vantage test --watch -c "npx tsx server.ts"
+```
+
+## How It Works
+
+Under the hood, Watch Mode performs the following lifecycle:
+
+1. **Monitors**: Vantage uses internal file watchers to detect changes in your project directory (ignoring `node_modules` and `.git`).
+2. **Debounces**: File changes are debounced to prevent running the suite multiple times during a bulk save.
+3. **Teardown**: Any running server processes and ephemeral Testcontainers (databases) are safely spun down.
+4. **Re-run**: A fresh server and fresh databases are provisioned, and the test suite executes from scratch.
+
+This ensures complete isolation between test runs, guaranteeing that your state is wiped clean every time a file changes.
+
+## Best Practices
+
+Watch Mode is incredibly powerful when combined with **Testcontainers**. Because Vantage manages the entire lifecycle of your application and its dependencies, you never have to manually reset your local database during development. You simply write code, hit save, and watch the terminal turn green.

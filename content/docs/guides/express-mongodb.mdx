@@ -1,0 +1,88 @@
+---
+title: Express + MongoDB
+description: A complete tutorial for testing a Node.js API with ephemeral MongoDB.
+---
+
+This guide walks through configuring Vantage for a standard Node.js backend using Express and Mongoose. We will use the **Vantage Express SDK** for zero-config recording, and **Testcontainers** for database isolation.
+
+## 1. SDK Integration
+
+First, install the Vantage CLI as a development dependency:
+
+```bash
+npm install vantage-cli --save-dev
+```
+
+Next, add the Vantage middleware to your Express application. Place it immediately after your body parsers so it can capture the raw JSON payloads.
+
+```typescript
+import express from 'express';
+import mongoose from 'mongoose';
+import { vantageMiddleware } from 'vantage-cli/sdk';
+
+const app = express();
+app.use(express.json());
+
+// Attach Vantage middleware
+app.use(vantageMiddleware);
+
+// Your application logic
+app.post('/api/products', async (req, res) => {
+  // Connect to DB and save product
+  await mongoose.connect(process.env.MONGO_URI);
+  res.status(201).json({ success: true, product: req.body });
+});
+```
+
+## 2. Configuration
+
+Create a `vantage.config.yaml` file to tell Vantage how to provision a fresh MongoDB database for every test run.
+
+```yaml
+start_command: "npm start"
+target: "http://localhost:3000"
+
+# Automatically mask timestamps and ObjectIDs
+smart_masking: true
+noise:
+  body_fields:
+    - _id
+    - __v
+
+containers:
+  - image: "mongo:6"
+    ports:
+      - 27017:27017
+    env:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    # Vantage constructs the URI and injects it here
+    env_var: MONGO_URI
+```
+
+## 3. Recording Traffic
+
+Start the recording session. Because you are using the Node.js middleware, you do not need the `--proxy` flag. Vantage will automatically communicate with the middleware via IPC.
+
+```bash
+vantage record -c "npm run dev"
+```
+
+Send requests to `http://localhost:3000`. Vantage will intercept them from inside the Express app, ignoring any hops or internal proxying.
+
+## 4. Replaying the Tests
+
+To execute your test suite continuously while you write code, use Watch Mode:
+
+```bash
+vantage test --watch -c "npm run dev"
+```
+
+Every time you save a TypeScript file:
+1. The current MongoDB container is destroyed.
+2. A fresh MongoDB container is spun up.
+3. A new `MONGO_URI` is injected into the environment.
+4. Your Express server reloads.
+5. The test suite replays.
+
+This guarantees absolute state isolation for every test run, allowing you to practice true Test-Driven Development (TDD) without ever worrying about dirty databases or manual cleanup.

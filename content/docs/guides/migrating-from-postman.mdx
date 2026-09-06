@@ -1,0 +1,36 @@
+---
+title: Migrating from Postman
+description: Transitioning from manual Postman collections to automated Vantage suites.
+---
+
+If your team currently uses Postman to verify API behavior, transitioning to Vantage can significantly reduce your manual QA overhead and eliminate the dreaded "works on my machine" syndrome caused by shared database state.
+
+## The Postman Workflow Problem
+
+A typical Postman workflow looks like this:
+1. You deploy a staging database.
+2. Developer A runs a Postman collection that creates a user and deletes it.
+3. Developer B tries to run a test that fetches that specific user, but it fails because Developer A just deleted it.
+4. You spend hours writing pre-request scripts to seed data and teardown scripts to clean it up.
+
+## The Vantage Solution
+
+Vantage eliminates shared state entirely by provisioning ephemeral databases for *every single test run*.
+
+### Step 1: Exporting Traffic
+Vantage doesn't natively import Postman JSON collections. Instead, we use Postman to generate the traffic that Vantage records!
+
+1. Start Vantage in proxy mode: `vantage record -c "npm start" --proxy 3000`
+2. Open Postman.
+3. Change your Postman environment variables so the `baseUrl` points to the Vantage Proxy (e.g., `http://localhost:6789`).
+4. Click "Run Collection" in Postman.
+
+### Step 2: The Translation
+As Postman fires its HTTP requests at the proxy, Vantage captures every single transaction. 
+
+By the time the Postman Collection Runner finishes, Vantage has successfully translated your entire Postman suite into deterministic, version-controllable YAML test files.
+
+### Step 3: Deleting Postman
+You can now close Postman. 
+
+Commit the generated `.vantage` folder to your Git repository. From now on, your team simply runs `vantage test`. Because Vantage orchestrates the database locally via Docker, developers no longer step on each other's toes, and the tests run flawlessly in CI.

@@ -1,0 +1,90 @@
+---
+title: Quick Start (5 min)
+description: The fastest path from zero to a passing test suite.
+---
+
+This guide will walk you through recording your first test case and replaying it against your local server. We'll use a standard Node.js Express application as an example.
+
+## 1. Setup the Sample App
+
+First, make sure you have an Express app running, and that you've imported the Vantage SDK middleware. The middleware intercepts the raw traffic so Vantage can record it.
+
+Install Vantage into your project:
+
+```bash
+npm install -D vantage-cli
+```
+
+Then, inject the middleware into your Express `app.ts` (or `server.js`):
+
+```typescript
+// app.ts
+process.env.VANTAGE_MODE = process.env.VANTAGE_MODE || 'off';
+import express from 'express';
+import { vantageMiddleware } from 'vantage-cli/sdk';
+
+const app = express();
+app.use(express.json());
+
+// 1. Add Vantage Middleware (it only intercepts if VANTAGE_MODE=record)
+app.use(vantageMiddleware);
+
+// --- Your App Logic ---
+app.get('/api/users', (req, res) => {
+  res.json([{ id: 1, name: 'Alice' }]);
+});
+
+export default app;
+```
+
+> [!NOTE]
+> The middleware is a completely safe no-op in production. It only actively intercepts traffic when `process.env.VANTAGE_MODE` is explicitly set to `record`.
+
+## 2. Record Traffic
+
+To start recording, run the Vantage CLI in record mode. You can pass the `-c` flag to have Vantage automatically start your app server for you.
+
+```bash
+vantage record -c "npx ts-node app.ts" --port 6789
+```
+
+This starts the Vantage proxy on port `6789`, and boots your Express app (which likely runs on port `3000`).
+
+Now, open Postman, curl, or your browser, and make a request to the **Vantage Proxy Port** instead of your app port:
+
+```bash
+curl http://localhost:6789/api/users
+```
+
+You'll see a log in your terminal indicating that Vantage successfully intercepted and recorded the traffic. A new file will be created in your `.vantage/test-set-1/tests/` directory!
+
+Press `q` in the terminal to stop the recording server.
+
+## 3. Replay Tests
+
+Now that you've captured some real traffic, let's play it back to ensure the API behaves identically.
+
+```bash
+vantage test -c "npx ts-node app.ts" --target http://127.0.0.1:3000
+```
+
+Vantage will:
+1. Start your server.
+2. Fire the recorded HTTP request at your server.
+3. Diff the actual response (status code, headers, and JSON body) against the expected recorded response.
+4. Output a success message.
+
+```text
+ ♻️ REPLAYING TEST SET: test-set-1
+
+   ✔ get-api-users-1 (12ms)
+
+ --------------------------------------------------
+ Results: 1 passed, 0 failed, 1 total (12ms)
+```
+
+## Congratulations!
+
+You just created and ran an end-to-end API test without writing a single line of assertion code. 
+
+From here, you can dive into [How Vantage Works](/docs/getting-started/how-it-works) to understand the architecture, or configure database state isolation using [Testcontainers](/docs/configuration/testcontainers).

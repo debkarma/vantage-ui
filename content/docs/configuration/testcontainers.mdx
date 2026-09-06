@@ -1,0 +1,57 @@
+---
+title: Testcontainers
+description: Spin up ephemeral databases automatically using Docker.
+---
+
+Testing stateful APIs is notoriously difficult because tests mutate the database. If a test deletes a user, the next time you run the suite, the user won't exist, and the test will fail.
+
+Vantage solves this by deeply integrating with **Testcontainers**. Vantage can automatically spin up fresh, ephemeral Docker containers (like PostgreSQL or MongoDB) immediately before your tests run, and tear them down immediately after. 
+
+This guarantees a completely clean slate for every single test run.
+
+## Defining a Container
+
+You define dependencies in the `containers` block of your `vantage.config.yaml`.
+
+### PostgreSQL Example
+
+```yaml
+containers:
+  - image: "postgres:15-alpine"
+    ports:
+      - 5432:5432
+    env:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    env_var: DATABASE_URL
+```
+
+### How it works
+
+1. You run `vantage test`.
+2. Vantage reads the config and asks Docker to pull and start `postgres:15-alpine`.
+3. Vantage waits for the container's designated port (5432) to become healthy and accept connections.
+4. Vantage constructs a connection string (e.g., `postgresql://myuser:mypassword@localhost:5432/mydb`).
+5. Vantage injects that connection string into the `DATABASE_URL` environment variable.
+6. Vantage starts your application. Your application connects to the fresh database.
+7. The tests run.
+8. The container is destroyed, leaving no trace on your system.
+
+## MongoDB Example
+
+You can use the exact same pattern for MongoDB or Redis.
+
+```yaml
+containers:
+  - image: "mongo:6"
+    ports:
+      - 27017:27017
+    env:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+    env_var: MONGO_URI
+```
+
+> [!WARNING]
+> Your host machine must have Docker installed and the Docker daemon running to use Testcontainers.

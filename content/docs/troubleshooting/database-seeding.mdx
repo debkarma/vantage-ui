@@ -1,0 +1,44 @@
+---
+title: Database Seeding
+description: Fixing tests that fail on the very first run.
+---
+
+A very common issue for new Vantage users is recording a perfect test suite, but seeing it fail immediately upon the first replay.
+
+## The Problem
+
+When you record traffic, you are likely interacting with a long-lived staging or development database. That database already has users, products, and authentication tokens in it.
+
+When you run `vantage test`, Testcontainers spins up a **completely empty** database. 
+
+If your recorded workflow attempts to `GET /api/users/1`, but the test suite never explicitly sent a `POST /api/users` request to create User 1, the test will fail with a 404 because User 1 doesn't exist in the fresh Docker database.
+
+## The Solution
+
+There are two primary ways to fix this:
+
+### 1. Record Self-Seeding Workflows
+
+The best approach is to ensure your test sets are completely self-contained. A good test set should always start by creating the resources it needs.
+
+For example, a valid workflow is:
+1. `POST /auth/register` (Creates a user)
+2. `POST /auth/login` (Gets a token)
+3. `POST /products` (Creates a product)
+4. `GET /products/1` (Fetches the product)
+
+Because Vantage executes tests chronologically, the resources will be created in the ephemeral database *before* they are fetched.
+
+### 2. Use Lifecycle Scripts
+
+If your application requires hundreds of records to exist before it can function (e.g., lookup tables, configuration flags), it is impractical to record API calls to create them all.
+
+Instead, write a database seeding script (e.g., `seed.ts` or `seed.sql`) and run it during the `pre_test` lifecycle hook:
+
+```yaml
+# vantage.config.yaml
+scripts:
+  pre_test: "npx tsx prisma/seed.ts"
+```
+
+Because the `pre_test` script runs *after* Testcontainers injects the `DATABASE_URL`, your script will automatically populate the fresh Docker database before the API tests begin.

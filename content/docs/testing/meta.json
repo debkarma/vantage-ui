@@ -1,0 +1,10 @@
+{
+  "title": "Testing",
+  "pages": [
+    "running-tests",
+    "test-diffing",
+    "watch-mode",
+    "ci-cd-integration",
+    "junit-xml-reports"
+  ]
+}

@@ -1,0 +1,45 @@
+---
+title: Running Tests
+description: Learn how to replay your recorded traffic against your backend.
+---
+
+Once you have recorded traffic into the `.vantage` directory, you can replay it against your application to ensure your API behaves exactly as expected.
+
+## Basic Replay
+
+If your application is already running, you can execute the test suite by simply running:
+
+```bash
+vantage test
+```
+
+By default, Vantage will look for your API at `http://localhost:3000`. It will read all test sets from the `.vantage` directory, replay the requests sequentially, and diff the responses.
+
+## Auto-starting the Server
+
+Manually starting and stopping your server before testing is tedious. Vantage can manage the lifecycle of your application automatically using the `-c` (command) flag:
+
+```bash
+vantage test -c "npm start"
+```
+
+Vantage will start your server, wait for it to become healthy, run the test suite, and safely terminate the server when finished.
+
+## Testing Against Remote Environments
+
+You can override the default target URL to test a staging or production environment. This is particularly useful for verifying deployments.
+
+```bash
+vantage test --target https://staging.myapp.com
+```
+
+## Execution Order
+
+Vantage guarantees **chronological execution**. Tests are run in the exact order they were recorded. This is crucial for stateful APIs where workflows depend on preceding requests. 
+
+For example, a test suite might look like this:
+1. `001-post-user.yaml` (Creates a user)
+2. `002-get-user.yaml` (Fetches the created user)
+3. `003-delete-user.yaml` (Deletes the user)
+
+Because Vantage enforces this order during replay, stateful workflows succeed consistently.

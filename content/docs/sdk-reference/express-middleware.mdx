@@ -1,0 +1,66 @@
+---
+title: Express Middleware
+description: Deep dive into the Node.js Express SDK internals and configuration.
+---
+
+The `vantageMiddleware` is a lightweight, zero-dependency interceptor designed specifically for Express.js applications. It acts as the bridge between your application logic and the Vantage CLI.
+
+## Import Path
+
+You import the middleware directly from the `vantage-cli/sdk` path:
+
+```typescript
+import { vantageMiddleware } from 'vantage-cli/sdk';
+```
+
+## How It Works
+
+When an HTTP request enters your Express application, the middleware performs the following operations:
+
+1. **State Check**: It checks the `VANTAGE_MODE` environment variable. If it is not set to `record`, the middleware immediately calls `next()` and does absolutely nothing. This guarantees zero overhead in production.
+2. **Request Capture**: It serializes the incoming `req.method`, `req.url`, `req.headers`, and `req.body`.
+3. **Response Interception**: It overrides the native `res.write`, `res.end`, and `res.json` methods to capture the payload immediately before it is sent over the wire back to the client.
+4. **Serialization**: It structures the captured data into a standard JSON payload and fires it via an internal IPC channel to the Vantage CLI process listening on port `6789`.
+
+## Configuration Options
+
+While the middleware works out-of-the-box with zero configuration, you can optionally pass a configuration object to fine-tune its behavior.
+
+### `ignore_paths`
+
+If your application has health check endpoints or static asset routes that you do not want to record, you can filter them out using regex or exact string matches:
+
+```typescript
+import express from 'express';
+import { vantageMiddleware } from 'vantage-cli/sdk';
+
+const app = express();
+
+app.use(vantageMiddleware({
+  ignore_paths: [
+    '/health',
+    '/metrics',
+    /^\/_next\/.*/ // Ignore all Next.js static assets
+  ]
+}));
+```
+
+Any request matching an `ignore_paths` entry will bypass the recorder completely.
+
+## Best Practices
+
+To ensure Vantage captures the rawest form of the request, **always place the middleware as high up in your middleware stack as possible**. 
+
+Ideally, place it immediately after your body parsers, but before your authentication, logging, or routing logic:
+
+```typescript
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ Place Vantage here
+app.use(vantageMiddleware);
+
+// ❌ Not here
+app.use(myAuthMiddleware);
+app.use('/api', myRoutes);
+```

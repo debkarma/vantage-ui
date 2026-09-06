@@ -1,0 +1,40 @@
+---
+title: Test Diffing & Assertions
+description: How Vantage compares expected vs actual API responses.
+---
+
+Vantage doesn't require you to write manual assertions. Instead, it performs a deep structural comparison (a "diff") between the recorded response and the actual response received during replay.
+
+## What Gets Compared
+
+When a test is executed, Vantage compares three main components:
+
+1. **Status Code**: The HTTP status code must match exactly.
+2. **Headers**: Vantage performs a subset-only comparison. The actual response must contain all the headers present in the recorded YAML file with matching values. Any *extra* headers in the actual response are ignored.
+3. **Body**: Vantage parses JSON bodies and performs a deep structural diff.
+
+## Failure Categories
+
+If a test fails, Vantage categorizes the failure into one of four distinct types to help you debug quickly:
+
+- `STATUS_CODE_CHANGED`: The expected status code (e.g., 200) did not match the actual status code (e.g., 500).
+- `HEADER_CHANGED`: An expected header is missing or its value has changed.
+- `BODY_CHANGED`: The structure or values within the JSON body do not match the expected state.
+- `CONNECTION_ERROR`: Vantage was unable to reach the target server.
+
+## Understanding the Diff Output
+
+When a test fails due to a `BODY_CHANGED` error, Vantage prints a unified diff in your terminal. It clearly highlights additions, deletions, and modifications:
+
+```text
+✖ Test 002-get-user failed: BODY_CHANGED
+
+  {
+    "id": "usr_123",
+    "name": "Alice",
+-   "role": "admin",
++   "role": "user"
+  }
+```
+
+This output instantly tells you that the `role` field changed from `admin` to `user`, allowing you to pinpoint the regression in your code.

@@ -1,0 +1,58 @@
+---
+title: Noise Filtering
+description: Configure Vantage to ignore dynamic data like timestamps and IDs.
+---
+
+APIs frequently return dynamic data—like auto-generated IDs, timestamps, or request traces. If Vantage strictly compared these fields during replay, every test would fail immediately because a `createdAt` timestamp from yesterday will never match a `createdAt` timestamp generated today.
+
+Vantage provides three mechanisms to filter out this "noise": **Header Noise**, **Body Field Noise**, and **Smart Auto-Masking**.
+
+## Header Noise
+
+The `noise.headers` array defines a list of HTTP headers that should be completely ignored during the diffing phase. Matching is always case-insensitive.
+
+```yaml
+noise:
+  headers:
+    - date
+    - etag
+    - x-trace-id
+```
+
+By default, Vantage already ignores hop-by-hop headers and standard dynamic headers like `Date`. You only need to add custom proprietary headers here.
+
+## Body Field Noise
+
+The `noise.body_fields` array allows you to ignore specific keys within a JSON response body. It supports dot-notation for nested objects.
+
+```yaml
+noise:
+  body_fields:
+    - _id
+    - data.createdAt
+    - user.metadata.lastLogin
+```
+
+If your API returns an array of objects, Vantage automatically applies the dot-notation filter to *every* object in that array. For example, `users.id` will ignore the `id` field for every user in the `users` array.
+
+## Smart Auto-Masking
+
+Configuring every single dynamic field manually can be exhausting. To solve this, Vantage ships with a feature called **Smart Auto-Masking**, which is enabled by default.
+
+When Vantage records traffic, it analyzes the response bodies. If it detects a string that perfectly matches a known dynamic format, it replaces the raw string with a masking token.
+
+### What gets masked?
+
+1. **UUIDs** (v1 through v5) are replaced with `<AUTO_MASKED_UUID>`
+2. **JSON Web Tokens (JWT)** are replaced with `<AUTO_MASKED_JWT>`
+3. **ISO-8601 Timestamps** are replaced with `<AUTO_MASKED_DATE>`
+
+Because this mask is applied *at recording time*, the YAML file saves the token. During test replay, Vantage applies the exact same regex mask to the actual response before diffing them. If the server returns a valid UUID, it becomes `<AUTO_MASKED_UUID>`, and the diff succeeds.
+
+### Disabling Smart Masking
+
+If Smart Masking is accidentally masking data that you strictly want to assert against, you can disable it in your configuration:
+
+```yaml
+smart_masking: false
+```

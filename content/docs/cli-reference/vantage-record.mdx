@@ -1,0 +1,37 @@
+---
+title: vantage record
+description: Intercept and save HTTP traffic to YAML files.
+---
+
+The `record` command is used to capture incoming HTTP requests and their responses.
+
+## Synopsis
+
+```bash
+vantage record [options]
+```
+
+## Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-c, --command` | string | none | The shell command used to boot your application server (e.g., `"npm start"`). |
+| `--proxy` | number | none | Enables Reverse Proxy mode and proxies traffic to the specified port. |
+| `--port` | number | 6789 | The port Vantage should listen on for incoming proxy traffic. |
+| `--test-set` | string | `test-set-N` | The name of the folder to save the recorded traffic into. |
+
+## Examples
+
+### Node.js (Express SDK)
+If you have injected the `vantageMiddleware` into your Express app, you only need to run:
+
+```bash
+vantage record -c "npm run dev"
+```
+
+### Python (Reverse Proxy)
+To record a Python FastAPI backend running on port 8000:
+
+```bash
+vantage record -c "uvicorn main:app --port 8000" --proxy 8000
+```

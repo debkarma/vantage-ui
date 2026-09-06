@@ -1,0 +1,41 @@
+---
+title: vantage test
+description: Replay recorded traffic and diff the responses.
+---
+
+The `test` command replays all recorded requests in chronological order and performs a deep structural diff on the responses.
+
+## Synopsis
+
+```bash
+vantage test [options]
+```
+
+## Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-c, --command` | string | none | The shell command used to boot your application server. |
+| `--target` | string | `http://localhost:3000` | The base URL to send the replayed requests to. |
+| `--test-set` | string | all | Replay only a specific test set folder. |
+| `--watch` | boolean | false | Watch for file changes and re-run the suite automatically. |
+| `--ci` | boolean | false | Disable interactive terminal formatting (colors, spinners). |
+| `--reporter` | enum | `cli` | Format of the output (`cli` or `junit`). |
+| `--output` | string | `./vantage-report.xml` | Path to save the JUnit report (requires `--reporter=junit`). |
+
+## Examples
+
+### Local Testing
+```bash
+vantage test -c "npm start"
+```
+
+### CI Pipeline
+```bash
+vantage test --ci -c "npm start" --reporter=junit
+```
+
+### Watch Mode (TDD)
+```bash
+vantage test --watch -c "npx tsx server.ts"
+```

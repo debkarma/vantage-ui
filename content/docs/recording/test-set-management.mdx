@@ -1,0 +1,51 @@
+---
+title: Test Set Management
+description: Organize your recorded traffic into distinct, replayable test suites.
+---
+
+Vantage organizes your recorded API traffic into grouped folders called **Test Sets**. A Test Set represents a specific recording session or a logical grouping of API workflows.
+
+## Directory Structure
+
+All test sets are saved locally in the `.vantage` folder at the root of your project.
+
+```text
+.vantage/
+├── test-set-1/
+│   ├── 001-post-users.yaml
+│   ├── 002-get-users.yaml
+│   └── 003-delete-users.yaml
+└── test-set-2/
+    ├── 001-post-login.yaml
+    └── 002-get-profile.yaml
+```
+
+The numeric prefix on each YAML file guarantees that Vantage will replay the requests in the exact chronological order they were recorded. This is critical for stateful API workflows where resources must be created before they can be fetched or deleted.
+
+## Creating a Test Set
+
+By default, running `vantage record` creates a new test set incrementally (e.g., if `test-set-1` exists, it creates `test-set-2`).
+
+To record traffic into a specific test set, use the `--test-set` flag:
+
+```bash
+vantage record --test-set auth-flow
+```
+
+## Listing Test Sets
+
+To view all available test sets in your project, use the `list` command:
+
+```bash
+vantage list
+```
+
+This will output a summary of your test sets and the number of tests contained within each.
+
+## Replaying a Specific Test Set
+
+By default, `vantage test` will replay every test set sequentially. If you are debugging a specific workflow and only want to run a single suite, target it with the `--test-set` flag:
+
+```bash
+vantage test --test-set auth-flow
+```

@@ -1,0 +1,29 @@
+---
+title: Introduction
+description: Meet Vantage, the API testing tool that writes its own tests.
+---
+
+Vantage is an ultra-fast, zero-config API testing tool that automatically generates and replays end-to-end tests by intercepting your HTTP traffic. 
+
+No more writing tedious boilerplate tests. Just start your app, run your standard manual test flows (via Postman, curl, or your frontend), and Vantage will automatically record the requests, responses, and database state.
+
+It takes the magic of enterprise API testing platforms and distills it into an incredibly lightweight, fast, open-source CLI tailored for modern development workflows.
+
+## Why Vantage?
+
+Building test suites for stateful APIs is traditionally a slow, manual process. You have to seed databases, mock services, assert on complex JSON objects, and constantly update the tests when your API schema changes. 
+
+Vantage flips this paradigm:
+
+- **Zero-config recording:** Intercept traffic with a single command.
+- **Deterministic replay:** Ephemeral Docker databases are spun up for every test run, ensuring your tests never flake due to polluted state.
+- **No vendor lock-in:** Export your recorded traffic to native Jest or Pytest suites at any time.
+
+## Core Features
+
+- **Traffic Recording**: Instantly intercept and record incoming HTTP traffic to your local server.
+- **Smart Masking**: Automatically ignores volatile JSON fields (like `updatedAt`, timestamps, and UUIDs) when diffing responses.
+- **CI Native**: Built-in `--ci` mode natively outputs standard **JUnit XML** for seamless GitHub Actions and GitLab CI integration.
+- **Watch Mode**: Run `vantage test --watch` for instant background hot-reloading during local development.
+
+Get ready to build tests at the speed of your manual QA! Let's get started.

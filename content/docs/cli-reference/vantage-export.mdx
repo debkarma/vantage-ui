@@ -1,0 +1,32 @@
+---
+title: vantage export
+description: Translate YAML tests into native code.
+---
+
+The `export` command converts your Vantage test sets into standalone code files for frameworks like Jest or Pytest.
+
+## Synopsis
+
+```bash
+vantage export [options]
+```
+
+## Options
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--format` | enum | required | The target testing framework (`jest` or `pytest`). |
+| `--app-entry` | string | none | The relative path to your Express app entry file (Required for `jest`). |
+| `--output` | string | `./tests/` | The directory or file path to save the generated code to. |
+
+## Examples
+
+### Exporting to Jest
+```bash
+vantage export --format jest --app-entry ./src/app.ts --output ./tests/generated
+```
+
+### Exporting to Pytest
+```bash
+vantage export --format pytest --output ./tests/test_api.py
+```

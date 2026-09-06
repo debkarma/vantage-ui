@@ -1,0 +1,26 @@
+---
+title: Known Limitations
+description: Workflows and architectures that Vantage currently does not support.
+---
+
+Vantage is highly optimized for testing standard REST, GraphQL, and JSON-based HTTP APIs. Because of its architecture, there are a few scenarios where Vantage will not work as expected.
+
+## WebSockets and Server-Sent Events
+
+Vantage's reverse proxy and Express middleware are designed for strictly stateless HTTP request/response cycles.
+
+- **WebSockets (ws:// / wss://)**: Connection upgrade headers are stripped and the connection will fail. Vantage cannot record bidirectional socket traffic.
+- **Server-Sent Events (SSE)**: The connection will hang. Vantage waits for the response stream to close before serializing the payload, which never happens with SSE.
+- **gRPC**: Not supported.
+
+## Large File Uploads
+
+While Vantage supports `multipart/form-data`, attempting to record multi-gigabyte file uploads will likely result in an Out-Of-Memory (OOM) error.
+
+Vantage buffers the entire request payload in memory to serialize it into the YAML test file. It is not designed to stream large binaries to disk. Limit your recorded file uploads to small assets (e.g., avatar images < 5MB).
+
+## Non-Deterministic Encryption
+
+If your API endpoints expect payloads that are uniquely encrypted on the client side for *every single request* (e.g., time-based HMAC signatures in the body), the replayed tests will fail. 
+
+When Vantage replays the request, it sends the exact payload that was recorded. If your server rejects it because the signature is now "expired", you must mock your authentication layer or disable signature verification during the `VANTAGE_MODE=test` environment.

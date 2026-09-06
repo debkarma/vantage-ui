@@ -1,0 +1,87 @@
+---
+title: FastAPI + PostgreSQL
+description: A complete end-to-end tutorial for testing a Python API with an ephemeral database.
+---
+
+This guide walks you through setting up Vantage for a standard Python backend using FastAPI and PostgreSQL. 
+
+We will use the **Reverse Proxy** to record traffic and **Testcontainers** to spin up an ephemeral database during replay.
+
+## 1. Project Overview
+
+Imagine we have a simple FastAPI application (`main.py`) that connects to a PostgreSQL database using an environment variable called `DATABASE_URL`.
+
+```python
+import os
+from fastapi import FastAPI
+import asyncpg
+
+app = FastAPI()
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+@app.post("/users")
+async def create_user(name: str):
+    # Connects to PostgreSQL and inserts a user
+    conn = await asyncpg.connect(DATABASE_URL)
+    await conn.execute("INSERT INTO users(name) VALUES($1)", name)
+    return {"status": "success", "user": name}
+```
+
+## 2. Configuration
+
+Create a `vantage.config.yaml` file in the root of your project. We need to tell Vantage how to spin up a PostgreSQL database and inject the connection string into the `DATABASE_URL` environment variable.
+
+```yaml
+start_command: "uvicorn main:app --port 8000"
+target: "http://localhost:8000"
+
+containers:
+  - image: "postgres:15-alpine"
+    ports:
+      - 5432:5432
+    env:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: userdb
+    env_var: DATABASE_URL
+
+scripts:
+  # Assuming you have a script to run DB migrations before testing
+  pre_test: "python migrate.py"
+```
+
+## 3. Recording Traffic
+
+Since FastAPI is written in Python, we use Vantage's reverse proxy to record traffic. Start the recording session, passing in your startup command and the port your app listens on:
+
+```bash
+vantage record -c "uvicorn main:app --port 8000" --proxy 8000
+```
+
+Vantage is now proxying traffic on port `6789`. Send a test request using curl or Postman:
+
+```bash
+curl -X POST http://localhost:6789/users -H "Content-Type: application/json" -d '{"name": "Alice"}'
+```
+
+Vantage intercepts the request, forwards it to FastAPI, captures the `200 OK` response, and saves it to `.vantage/test-set-1/001-post-users.yaml`. Press `q` to exit the recording session.
+
+## 4. Replaying the Tests
+
+Now, run the test suite:
+
+```bash
+vantage test
+```
+
+Here is exactly what happens in the background:
+1. Vantage pulls the `postgres:15-alpine` Docker image.
+2. It starts a fresh container and waits for it to become healthy.
+3. It constructs the connection string (`postgresql://admin:password123@localhost:5432/userdb`) and injects it into `DATABASE_URL`.
+4. It executes `python migrate.py` to create the users table in the fresh database.
+5. It boots your FastAPI server via `uvicorn main:app --port 8000`.
+6. It sends the recorded POST request to your server.
+7. It verifies the response matches perfectly.
+8. It tears down the PostgreSQL container and stops the FastAPI server.
+
+You now have a fully deterministic, self-contained E2E testing pipeline for your Python backend!

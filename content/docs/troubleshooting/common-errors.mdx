@@ -1,0 +1,57 @@
+---
+title: Common Errors
+description: Solutions for the most frequently encountered Vantage errors.
+---
+
+## EADDRINUSE (Port already in use)
+
+When using Vantage in reverse proxy mode, you might encounter the following error:
+
+```text
+Error: listen EADDRINUSE: address already in use :::6789
+```
+
+**Cause**: The Vantage proxy defaults to listening on port `6789`, but another application (or a zombie Vantage process) is already using that port.
+
+**Solution**: 
+Either kill the process currently holding port 6789, or tell Vantage to use a different port via the `--port` flag:
+
+```bash
+vantage record -c "npm start" --proxy 3000 --port 9000
+```
+
+## ConnectionRefused (ECONNREFUSED)
+
+```text
+Error: connect ECONNREFUSED 127.0.0.1:3000
+```
+
+**Cause**: Vantage tried to forward traffic to your application, but your application server isn't running, or it bound to a different interface (like IPv6 `::1` instead of IPv4 `127.0.0.1`).
+
+**Solution**: 
+1. Ensure your `start_command` in `vantage.config.yaml` is actually booting the server.
+2. If your app binds to `localhost` on Node.js 18+, it may resolve to IPv6 (`::1`). Try explicitly setting your `target` to `http://127.0.0.1:3000` instead of `localhost`.
+
+## Content-Length Mismatch
+
+During a test replay, your server logs might show warnings about an invalid `Content-Length` header.
+
+**Cause**: Vantage automatically strips hop-by-hop headers (like `Connection` and `Transfer-Encoding`) and recalculates the `Content-Length` of the JSON payloads before forwarding them. If your application relies on the *original* raw byte size from the client, they will not match.
+
+**Solution**: Rely on standard JSON body parsing middlewares (`express.json()`, `FastAPI(Body)`) rather than manually validating raw byte counts.
+
+## Smart Masking Catches Too Much
+
+You might notice that actual string values in your database (like a user's name that happens to look like a UUID) are being overwritten in the YAML files with `<AUTO_MASKED_UUID>`.
+
+**Cause**: The Smart Auto-Masking feature uses aggressive regex patterns to anonymize UUIDs, JWTs, and Timestamps. If it finds a match, it masks it, regardless of the JSON key name.
+
+**Solution**: Disable smart masking in your configuration and rely on explicit body field noise instead:
+
+```yaml
+smart_masking: false
+noise:
+  body_fields:
+    - user.id
+    - data.token
+```

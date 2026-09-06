@@ -1,0 +1,51 @@
+---
+title: Lifecycle Scripts
+description: Execute shell commands before and after your test suite runs.
+---
+
+Sometimes spinning up a database via Testcontainers isn't enough. Your database might be completely empty, but your API expects certain tables, schema migrations, or seed data to exist before it can process requests.
+
+You can handle this using **Lifecycle Scripts**.
+
+## The `scripts` block
+
+In your `vantage.config.yaml`, you can define shell commands to run at specific points during the testing lifecycle.
+
+```yaml
+scripts:
+  pre_test: "npx prisma db push && npx prisma db seed"
+  post_test: "echo 'Tests finished!'"
+```
+
+## Execution Order
+
+Vantage orchestrates the entire workflow in a very specific order to ensure your scripts have access to the right environment:
+
+1. **Containers Start**: All defined Testcontainers are spun up.
+2. **Environment Injected**: Variables like `DATABASE_URL` are exported to the active shell.
+3. **`pre_test` Executed**: Your pre-test script runs. Because the environment variables have already been injected, commands like `prisma db push` will automatically connect to the ephemeral Docker database rather than your local dev database.
+4. **App Starts**: Your application is booted using the `start_command`.
+5. **Tests Run**: The API traffic is replayed.
+6. **App Stops**: The application process is gracefully terminated.
+7. **`post_test` Executed**: Your teardown script runs.
+8. **Containers Destroyed**: Docker cleans up the ephemeral databases.
+
+## Common Use Cases
+
+### Prisma Migrations
+
+If you use an ORM like Prisma, you need to push your schema to the fresh database before starting the app.
+
+```yaml
+scripts:
+  pre_test: "npx prisma db push"
+```
+
+### Cache Warming
+
+If your application relies on an external Redis cache that takes time to populate, you can run a warming script prior to testing.
+
+```yaml
+scripts:
+  pre_test: "ts-node ./scripts/warm-cache.ts"
+```

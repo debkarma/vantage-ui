@@ -1,0 +1,47 @@
+---
+title: Recording with Express SDK
+description: Intercept API traffic automatically in Node.js applications using the Vantage middleware.
+---
+
+Vantage provides a lightweight, zero-configuration middleware for Express.js that records incoming HTTP requests and their responses. 
+
+## Installation
+
+Install the Vantage CLI package into your Node.js project:
+
+```bash
+npm install vantage-cli --save-dev
+```
+
+## Adding the Middleware
+
+Import the middleware and attach it to your Express application. It is highly recommended to place this middleware as early as possible in your route definitions, so it captures the raw incoming requests before other body-parsing middleware modifies them.
+
+```typescript
+import express from 'express';
+import { vantageMiddleware } from 'vantage-cli/sdk';
+
+const app = express();
+
+// Attach Vantage middleware
+app.use(vantageMiddleware);
+
+// Your normal routes
+app.get('/api/users', (req, res) => {
+  res.json({ users: [] });
+});
+```
+
+## How It Works in Production
+
+The `vantageMiddleware` is completely inactive by default. It acts as a transparent pass-through unless the `VANTAGE_MODE=record` environment variable is present. You can safely deploy this middleware to production environments without any performance degradation or unintended traffic logging.
+
+## Starting a Recording Session
+
+To start intercepting traffic, run your application using the Vantage CLI:
+
+```bash
+vantage record -c "npm run dev"
+```
+
+Vantage will automatically inject the necessary environment variables, spin up your server, and begin recording every HTTP transaction to your `.vantage` directory.

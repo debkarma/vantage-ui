@@ -1,0 +1,37 @@
+---
+title: Export to Pytest
+description: Generate native Pytest suites for Python applications.
+---
+
+If your backend is written in Python (using FastAPI, Flask, Django, etc.) and you recorded your traffic using the Vantage Reverse Proxy, you can export those recordings directly into native `pytest` code.
+
+## Generating the Code
+
+Run the `export` command with the `pytest` format flag:
+
+```bash
+vantage export --format pytest --output ./tests/generated_test.py
+```
+
+## How It Works
+
+Vantage generates a standard Python test file using the `httpx` synchronous testing client. 
+
+Here is an example of the generated output:
+
+```python
+import httpx
+
+BASE_URL = "http://localhost:8000"
+
+def test_001_post_users():
+    response = httpx.post(
+        f"{BASE_URL}/api/users",
+        headers={"authorization": "Bearer my-token"},
+        json={"name": "Alice"}
+    )
+    
+    assert response.status_code == 201
+```
+
+Unlike the Node.js `supertest` export (which tests the app in-memory), the Python export assumes your server is running on a real HTTP port. This creates a true End-to-End (E2E) test suite.

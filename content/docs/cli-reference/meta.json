@@ -1,0 +1,10 @@
+{
+  "title": "CLI Reference",
+  "pages": [
+    "vantage-record",
+    "vantage-test",
+    "vantage-list",
+    "vantage-export",
+    "global-flags"
+  ]
+}

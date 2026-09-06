@@ -1,0 +1,9 @@
+{
+  "title": "Configuration",
+  "pages": [
+    "vantage-config-yaml",
+    "noise-filtering",
+    "testcontainers",
+    "lifecycle-scripts"
+  ]
+}

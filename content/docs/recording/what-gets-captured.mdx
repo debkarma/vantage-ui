@@ -1,0 +1,54 @@
+---
+title: What Gets Captured
+description: Understand exactly what data Vantage intercepts and saves to your test files.
+---
+
+When Vantage intercepts an HTTP transaction, it serializes the exact state of the request and response into a human-readable YAML file. These files serve as both the documentation of your API and the source of truth for your test suite.
+
+## The Test File Structure
+
+A standard captured test file looks like this:
+
+```yaml
+id: req_1a2b3c
+method: POST
+path: /api/v1/users
+headers:
+  content-type: application/json
+  authorization: Bearer token123
+request_body:
+  email: test@example.com
+  name: Alice
+response:
+  status: 201
+  headers:
+    content-type: application/json
+  body:
+    id: user_9x8y7z
+    email: test@example.com
+    name: Alice
+    created_at: '2023-10-25T14:30:00Z'
+```
+
+## Request Capture
+
+Vantage captures the following request properties:
+- **Method**: The HTTP method (GET, POST, PUT, DELETE, etc.).
+- **Path**: The endpoint URL, including any query parameters.
+- **Headers**: All incoming HTTP headers. Hop-by-hop headers (like `Connection` or `Transfer-Encoding`) are automatically stripped.
+- **Body**: The parsed request payload. JSON bodies are parsed into native YAML structures for easy reading and diffing.
+
+## Response Capture
+
+Vantage captures the following response properties:
+- **Status Code**: The HTTP status code returned by your server.
+- **Headers**: The outgoing HTTP headers.
+- **Body**: The parsed response payload.
+
+## Limitations
+
+Currently, Vantage is optimized for standard REST and GraphQL JSON APIs. It does not capture:
+- **WebSocket connections**
+- **Server-Sent Events (SSE)**
+- **Large binary file uploads** (multipart/form-data support is limited)
+- **Streaming responses**

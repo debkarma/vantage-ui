@@ -1,0 +1,69 @@
+---
+title: Installation
+description: How to install Vantage locally or run it via npx.
+---
+
+Vantage is distributed as a lightweight CLI package on the npm registry. You can install it globally to use the CLI from anywhere on your machine, or you can run it directly using `npx`.
+
+## Prerequisites
+
+Before using Vantage, make sure your development environment has the following installed:
+
+- **Node.js** (v18 or higher)
+- **Docker** (Required only for Testcontainers auto-provisioning databases during test runs)
+
+## Local Installation (Recommended)
+
+Installing Vantage as a development dependency in your project is the recommended approach. This ensures your CI/CD pipelines use the exact same version of Vantage as your local environment, and allows Node.js developers to import the Express SDK natively.
+
+Choose your preferred package manager to install the CLI:
+
+```bash
+# npm
+npm install -D vantage-cli
+
+# yarn
+yarn add -D vantage-cli
+
+# pnpm
+pnpm add -D vantage-cli
+
+# bun
+bun add -d vantage-cli
+```
+
+### Verify Installation
+
+Once installed, you can verify that the CLI is working by checking its version:
+
+```bash
+vantage --help
+```
+
+You should see the Vantage CLI help menu detailing the available commands (`record`, `test`, `list`, `export`).
+
+## Running via NPX
+
+If you prefer not to install the CLI globally, or if you're executing Vantage inside a CI pipeline, you can run it on the fly using `npx`:
+
+```bash
+npx vantage-cli test --ci
+```
+
+## Adding as a Dev Dependency
+
+If you want to lock the Vantage version for your specific project and run it via npm scripts (e.g., `npm run test:e2e`), you can install it as a standard development dependency:
+
+```bash
+npm install -D vantage-cli
+```
+
+You can then add a script to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "test:api": "vantage test -c \"npm run start:dev\""
+  }
+}
+```

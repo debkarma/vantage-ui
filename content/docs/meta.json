@@ -1,0 +1,14 @@
+{
+  "pages": [
+    "index",
+    "getting-started",
+    "recording",
+    "testing",
+    "configuration",
+    "exporting",
+    "cli-reference",
+    "sdk-reference",
+    "guides",
+    "troubleshooting"
+  ]
+}

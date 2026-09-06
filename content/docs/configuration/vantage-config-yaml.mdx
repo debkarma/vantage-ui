@@ -1,0 +1,70 @@
+---
+title: vantage.config.yaml
+description: The central configuration file for Vantage.
+---
+
+The `vantage.config.yaml` file is the heart of your testing setup. It dictates how Vantage connects to your app, what data it ignores during diffing, and what external databases it spins up.
+
+## Auto-Creation
+
+If you run `vantage test` and a configuration file does not exist, Vantage will automatically generate a boilerplate `vantage.config.yaml` in the root of your project.
+
+## Full Configuration Reference
+
+Here is a complete, annotated example of a configuration file:
+
+```yaml
+# The command to start your application (optional)
+# If provided, Vantage will start this before testing and kill it after.
+start_command: "npm run dev"
+
+# Target URL for the test suite
+target: "http://localhost:3000"
+
+noise:
+  # HTTP Headers to completely ignore during diffing (case-insensitive)
+  headers:
+    - date
+    - etag
+    - content-length
+    - x-request-id
+
+  # JSON Body fields to ignore (supports dot-notation)
+  body_fields:
+    - data.createdAt
+    - meta.trace_id
+
+# Whether to automatically mask UUIDs, JWTs, and timestamps
+smart_masking: true
+
+containers:
+  # Defines an ephemeral PostgreSQL database via Testcontainers
+  - image: "postgres:15-alpine"
+    ports:
+      - 5432:5432
+    env:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: testdb
+    # Environment variable exposed to your app with the connection string
+    env_var: DATABASE_URL
+
+scripts:
+  # Run a command before the test suite starts (e.g., seeding a DB)
+  pre_test: "npx prisma db push"
+  
+  # Run a command after the test suite finishes
+  post_test: "npm run cleanup"
+```
+
+## Default Values
+
+If a field is omitted from your configuration file, Vantage falls back to these sensible defaults:
+
+| Field | Default Value |
+|-------|---------------|
+| `target` | `http://localhost:3000` |
+| `smart_masking` | `true` |
+| `noise.headers` | `['date', 'etag', 'connection', 'keep-alive']` |
+| `noise.body_fields`| `[]` (Empty array) |
+| `containers` | `[]` (Empty array) |
