@@ -7,7 +7,7 @@ Vantage is highly optimized for testing standard REST, GraphQL, and JSON-based H
 
 ## WebSockets and Server-Sent Events
 
-Vantage's reverse proxy and Express middleware are designed for strictly stateless HTTP request/response cycles.
+Vantage's reverse proxy is designed for strictly stateless HTTP request/response cycles.
 
 - **WebSockets (ws:// / wss://)**: Connection upgrade headers are stripped and the connection will fail. Vantage cannot record bidirectional socket traffic.
 - **Server-Sent Events (SSE)**: The connection will hang. Vantage waits for the response stream to close before serializing the payload, which never happens with SSE.
@@ -24,3 +24,15 @@ Vantage buffers the entire request payload in memory to serialize it into the YA
 If your API endpoints expect payloads that are uniquely encrypted on the client side for *every single request* (e.g., time-based HMAC signatures in the body), the replayed tests will fail. 
 
 When Vantage replays the request, it sends the exact payload that was recorded. If your server rejects it because the signature is now "expired", you must mock your authentication layer or disable signature verification during the `VANTAGE_MODE=test` environment.
+
+## GraphQL (UX Limitation)
+
+Vantage fully supports recording and replaying GraphQL APIs, since they operate via standard HTTP POST requests with JSON payloads. However, the **User Experience** is currently limited.
+
+Because Vantage names the generated YAML files based on the HTTP method and URL path, and all GraphQL requests hit the exact same endpoint (e.g., `/graphql`), your test set will look like this:
+
+- `001-post-graphql.yaml`
+- `002-post-graphql.yaml`
+- `003-post-graphql.yaml`
+
+Vantage does not currently parse the internal GraphQL AST to extract the `operationName` for the filename. This means navigating through dozens of identical filenames in your `.vantage` folder can be cumbersome, though the tests will still execute flawlessly.

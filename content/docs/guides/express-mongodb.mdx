@@ -3,28 +3,18 @@ title: Express + MongoDB
 description: A complete tutorial for testing a Node.js API with ephemeral MongoDB.
 ---
 
-This guide walks through configuring Vantage for a standard Node.js backend using Express and Mongoose. We will use the **Vantage Express SDK** for zero-config recording, and **Testcontainers** for database isolation.
+This guide walks through configuring Vantage for a standard Node.js backend using Express and Mongoose. We will use the **Reverse Proxy** for zero-config recording, and **Testcontainers** for database isolation.
 
-## 1. SDK Integration
+## 1. Project Overview
 
-First, install the Vantage CLI as a development dependency:
-
-```bash
-npm install vantage-cli --save-dev
-```
-
-Next, add the Vantage middleware to your Express application. Place it immediately after your body parsers so it can capture the raw JSON payloads.
+Imagine we have a standard Express application that connects to MongoDB via a `MONGO_URI` environment variable.
 
 ```typescript
 import express from 'express';
 import mongoose from 'mongoose';
-import { vantageMiddleware } from 'vantage-cli/sdk';
 
 const app = express();
 app.use(express.json());
-
-// Attach Vantage middleware
-app.use(vantageMiddleware);
 
 // Your application logic
 app.post('/api/products', async (req, res) => {
@@ -32,43 +22,48 @@ app.post('/api/products', async (req, res) => {
   await mongoose.connect(process.env.MONGO_URI);
   res.status(201).json({ success: true, product: req.body });
 });
+
+app.listen(3000, () => console.log('Listening on port 3000'));
 ```
+
+*Notice that we did not have to install any Vantage SDKs or modify our application code!*
 
 ## 2. Configuration
 
-Create a `vantage.config.yaml` file to tell Vantage how to provision a fresh MongoDB database for every test run.
+Create a `vantage.config.yaml` file to tell Vantage how to provision a fresh MongoDB database for every test run, and to automatically ignore dynamic Mongoose fields like `_id` and `__v`.
 
 ```yaml
-start_command: "npm start"
-target: "http://localhost:3000"
-
-# Automatically mask timestamps and ObjectIDs
-smart_masking: true
+# Automatically mask timestamps
 noise:
+  smart_masking: true
   body_fields:
     - _id
     - __v
 
 containers:
-  - image: "mongo:6"
-    ports:
-      - 27017:27017
-    env:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: rootpassword
-    # Vantage constructs the URI and injects it here
+  - type: mongodb
+    image: "mongo:6.0"
+    # Vantage constructs the dynamic URI and injects it here
     env_var: MONGO_URI
 ```
 
+> **Note:** Vantage handles MongoDB port mappings dynamically using Testcontainers. Do not hardcode ports in the configuration file!
+
 ## 3. Recording Traffic
 
-Start the recording session. Because you are using the Node.js middleware, you do not need the `--proxy` flag. Vantage will automatically communicate with the middleware via IPC.
+Start the recording session. We use the `--proxy` flag to tell Vantage to intercept traffic flowing into our Express server.
 
 ```bash
-vantage record -c "npm run dev"
+vantage record -c "npm run dev" --proxy 3000
 ```
 
-Send requests to `http://localhost:3000`. Vantage will intercept them from inside the Express app, ignoring any hops or internal proxying.
+Vantage is now proxying traffic on port `6789`. Send test requests to the proxy:
+
+```bash
+curl -X POST http://localhost:6789/api/products -H "Content-Type: application/json" -d '{"name": "Laptop"}'
+```
+
+Vantage intercepts the request, forwards it to Express, captures the response, and saves it to `.vantage/test-set-0/tests/001-post-api-products.yaml`. Press `q` to exit the recording session.
 
 ## 4. Replaying the Tests
 
@@ -78,11 +73,11 @@ To execute your test suite continuously while you write code, use Watch Mode:
 vantage test --watch -c "npm run dev"
 ```
 
-Every time you save a TypeScript file:
+Every time you save a file:
 1. The current MongoDB container is destroyed.
-2. A fresh MongoDB container is spun up.
-3. A new `MONGO_URI` is injected into the environment.
-4. Your Express server reloads.
+2. A fresh MongoDB container is spun up on a random host port.
+3. A new `MONGO_URI` (e.g., `mongodb://localhost:32768/?directConnection=true`) is injected into the environment.
+4. Your Express server restarts automatically.
 5. The test suite replays.
 
 This guarantees absolute state isolation for every test run, allowing you to practice true Test-Driven Development (TDD) without ever worrying about dirty databases or manual cleanup.

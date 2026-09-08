@@ -16,17 +16,18 @@ vantage export [options]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--format` | enum | required | The target testing framework (`jest` or `pytest`). |
-| `--app-entry` | string | none | The relative path to your Express app entry file (Required for `jest`). |
-| `--output` | string | `./tests/` | The directory or file path to save the generated code to. |
+| `--app-entry` | string | `../../src/app` | The relative path to your Express app entry file (used by `jest`). |
+| `--test-set` | string | latest | Which recorded test set to export (e.g., `test-set-0`). |
+| `--out` | string | (see note) | Output directory for the generated test files. Defaults to `__tests__/vantage` for Jest and `tests/vantage` for Pytest. |
 
 ## Examples
 
 ### Exporting to Jest
 ```bash
-vantage export --format jest --app-entry ./src/app.ts --output ./tests/generated
+vantage export --format jest --app-entry ./src/app.ts --out ./__tests__/vantage
 ```
 
 ### Exporting to Pytest
 ```bash
-vantage export --format pytest --output ./tests/test_api.py
+vantage export --format pytest --out ./tests/vantage
 ```

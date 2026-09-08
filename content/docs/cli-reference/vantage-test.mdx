@@ -17,11 +17,10 @@ vantage test [options]
 |------|------|---------|-------------|
 | `-c, --command` | string | none | The shell command used to boot your application server. |
 | `--target` | string | `http://localhost:3000` | The base URL to send the replayed requests to. |
-| `--test-set` | string | all | Replay only a specific test set folder. |
+| `--delay` | number | 0 | Seconds to wait before replaying (defaults to 3 if `-c` is provided). |
+| `--test-set` | string | latest | Replay a specific test set (e.g., `test-set-0`). |
 | `--watch` | boolean | false | Watch for file changes and re-run the suite automatically. |
-| `--ci` | boolean | false | Disable interactive terminal formatting (colors, spinners). |
-| `--reporter` | enum | `cli` | Format of the output (`cli` or `junit`). |
-| `--output` | string | `./vantage-report.xml` | Path to save the JUnit report (requires `--reporter=junit`). |
+| `--ci` | boolean | false | Run in CI mode: disables interactive UI, outputs plain text, saves JUnit XML, and exits 1 on failure. |
 
 ## Examples
 
@@ -32,7 +31,12 @@ vantage test -c "npm start"
 
 ### CI Pipeline
 ```bash
-vantage test --ci -c "npm start" --reporter=junit
+vantage test --ci -c "npm start"
+```
+
+### Slower Backend Startup
+```bash
+vantage test -c "java -jar myapp.jar" --delay 5
 ```
 
 ### Watch Mode (TDD)

@@ -3,38 +3,57 @@ title: Test Diffing & Assertions
 description: How Vantage compares expected vs actual API responses.
 ---
 
-Vantage doesn't require you to write manual assertions. Instead, it performs a deep structural comparison (a "diff") between the recorded response and the actual response received during replay.
+Vantage eliminates the need to write manual assertions (`expect(res.body.name).toBe(...)`). Instead, it performs a deep structural diff between the recorded baseline and the live response received during replay.
 
 ## What Gets Compared
 
-When a test is executed, Vantage compares three main components:
+During test execution, Vantage evaluates three distinct layers of each HTTP transaction:
 
-1. **Status Code**: The HTTP status code must match exactly.
-2. **Headers**: Vantage performs a subset-only comparison. The actual response must contain all the headers present in the recorded YAML file with matching values. Any *extra* headers in the actual response are ignored.
-3. **Body**: Vantage parses JSON bodies and performs a deep structural diff.
+1. **Status Code**: The HTTP status code must match exactly (e.g., recorded `201` vs actual `201`).
+2. **Headers (Subset Match)**: Vantage performs a case-insensitive subset comparison. The actual response must contain all headers recorded in the baseline YAML with matching values. Any *extra* headers added by server middleware or proxies (e.g. `X-Powered-By`, `Date`) are ignored.
+3. **Body (Deep Structural Diff)**: JSON payloads are compared using structured object diffing (`diffJson`), meaning key ordering is ignored and only genuine value or structural differences trigger failures.
+
+> [!TIP]
+> **Dynamic Fields & Volatile Data:** Have fields that naturally change on every request (like `updated_at` timestamps or random UUID tokens)? Vantage runs responses through a **Noise Filter** prior to diffing so volatility doesn't cause false positives. See [Noise Filtering](/docs/configuration/noise-filtering).
+
+---
 
 ## Failure Categories
 
-If a test fails, Vantage categorizes the failure into one of four distinct types to help you debug quickly:
+When a test fails, Vantage categorizes the root cause into one of four distinct failure types:
 
-- `STATUS_CODE_CHANGED`: The expected status code (e.g., 200) did not match the actual status code (e.g., 500).
-- `HEADER_CHANGED`: An expected header is missing or its value has changed.
-- `BODY_CHANGED`: The structure or values within the JSON body do not match the expected state.
-- `CONNECTION_ERROR`: Vantage was unable to reach the target server.
+| Category | Description |
+| :--- | :--- |
+| `STATUS_CODE_CHANGED` | The actual HTTP status code differed from the expected status (e.g. expected `200`, received `500`). |
+| `HEADER_CHANGED` | A recorded header is missing from the response or its value has changed. |
+| `BODY_CHANGED` | The structure, keys, or values within the JSON response body do not match the baseline. |
+| `CONNECTION_ERROR` | Vantage was unable to connect to the target server (e.g. server crashed, timeout, or wrong port). |
 
-## Understanding the Diff Output
+---
 
-When a test fails due to a `BODY_CHANGED` error, Vantage prints a unified diff in your terminal. It clearly highlights additions, deletions, and modifications:
+## Interactive Terminal Diff Output
+
+When a test fails, Vantage's terminal UI displays an isolated failure card highlighting the exact discrepancy:
 
 ```text
-✖ Test 002-get-user failed: BODY_CHANGED
-
-  {
-    "id": "usr_123",
-    "name": "Alice",
--   "role": "admin",
-+   "role": "user"
-  }
+--------------------------------------------------------------------
+┌──────────────────────────────────────────────────────────────────┐
+│                        POST-API-USERS-1                          │
+│                                                                  │
+│              EXPECT STATUS     │     ACTUAL STATUS               │
+│                   200          │          200                    │
+├──────────────────────────────────────────────────────────────────┤
+│                          BODY DIFFS                              │
+│                                                                  │
+│     {                                                            │
+│       "id": "usr_123",                                           │
+│       "name": "Alice",                                           │
+│  -    "role": "admin",                                           │
+│  +    "role": "member"                                           │
+│     }                                                            │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-This output instantly tells you that the `role` field changed from `admin` to `user`, allowing you to pinpoint the regression in your code.
+- **Red (`-`)**: Present in recorded baseline, missing from current response.
+- **Green (`+`)**: Newly introduced in current response, missing from baseline.
+

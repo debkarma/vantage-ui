@@ -10,28 +10,64 @@ If your backend is written in Python (using FastAPI, Flask, Django, etc.) and yo
 Run the `export` command with the `pytest` format flag:
 
 ```bash
-vantage export --format pytest --output ./tests/generated_test.py
+vantage export --format pytest --out ./tests/vantage
 ```
+
+### CLI Options
+
+| Flag | Description | Default |
+| :--- | :--- | :--- |
+| `--format` | Target framework. Must be `jest` or `pytest`. | *(Required)* |
+| `--test-set` | Which recorded test set to export (e.g., `test-set-0`). | Latest recorded test set |
+| `--out` | Output directory for the generated test file. | `tests/vantage` |
+
+> **Note:** The exporter automatically generates a Python file named `test_<test-set-name>.py` (for example, `test_test_set_0.py`).
 
 ## How It Works
 
 Vantage generates a standard Python test file using the `httpx` synchronous testing client. 
 
-Here is an example of the generated output:
+Here is an example of the generated output for a test set containing noise-filtered dynamic fields (like `id` and `createdAt`):
 
 ```python
+"""Vantage API Tests — run against a live server (sequential)"""
 import httpx
 
-BASE_URL = "http://localhost:8000"
+class _AnyType:
+    def __init__(self, t):
+        self.t = t
+    def __eq__(self, other):
+        return isinstance(other, self.t)
 
-def test_001_post_users():
+ANY_STR = _AnyType(str)
+ANY_NUM = _AnyType((int, float))
+ANY_BOOL = _AnyType(bool)
+ANY_LIST = _AnyType(list)
+
+BASE_URL = "http://localhost:3000"
+
+def test_tc_1725800000000():
+    """POST /api/users — recorded by Vantage"""
     response = httpx.post(
         f"{BASE_URL}/api/users",
-        headers={"authorization": "Bearer my-token"},
-        json={"name": "Alice"}
+        headers={
+            "authorization": "Bearer my-token",
+            "content-type": "application/json"
+        },
+        json={
+            "name": "Alice"
+        },
     )
-    
+
     assert response.status_code == 201
+    assert response.json() == {
+        "id": ANY_STR,
+        "name": "Alice",
+        "createdAt": ANY_NUM
+    }
 ```
 
-Unlike the Node.js `supertest` export (which tests the app in-memory), the Python export assumes your server is running on a real HTTP port. This creates a true End-to-End (E2E) test suite.
+### Key Differences from Jest Export
+
+1. **True E2E Testing:** Unlike the Node.js `supertest` export (which tests the app in-memory), the Python export assumes your server is running on a real HTTP port (`BASE_URL`). This creates a true End-to-End (E2E) test suite.
+2. **Custom Noise Matchers:** Pytest lacks built-in asymmetric matchers like Jest's `expect.any()`. To handle dynamic fields without flakiness, Vantage automatically injects a helper class `_AnyType` at the top of the file, allowing exact dictionary equality checks using `ANY_STR`, `ANY_NUM`, etc.

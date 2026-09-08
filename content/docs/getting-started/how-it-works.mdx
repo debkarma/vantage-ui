@@ -3,50 +3,109 @@ title: How Vantage Works
 description: The architecture and flow of the Vantage Engine.
 ---
 
-Vantage operates fundamentally as an HTTP interceptor and diffing engine. To properly utilize the tool, it's helpful to understand the underlying architecture and how traffic flows during recording and testing.
+import { Mermaid } from '@/components/docs/mermaid';
+
+Vantage operates fundamentally as a network interceptor and deterministic diffing engine. To get the most out of Vantage, it helps to understand how traffic flows during recording and replaying.
+
+## System Architecture
+
+The following diagram illustrates the complete end-to-end architecture of Vantage, showing how it separates the **Record Phase** from the **Test Phase**, and how it achieves determinism using Testcontainers.
+
+<Mermaid chart={`graph TD
+    subgraph Record["Phase 1: Record Mode"]
+        direction TD
+        REC_ENG[Recording Engine] -->|"1. Spawns"| TC1[(Ephemeral Database
+        via Testcontainers)]
+        TC1 -.->|"2. Injects DB URL via ENV"| TA1[Target Application]
+        TA1 -.->|"3. Runs Migrations / Auto-Sync"| TC1
+        C[Client / Postman] -->|"4. HTTP Request"| RP[Vantage Reverse Proxy]
+        RP -->|"5. Forward Request"| TA1
+        TA1 -->|"6. HTTP Response"| RP
+        RP -->|"7. Capture & Serialize"| SE[Storage Engine]
+    end
+
+    SE -.->|"Saves as YAML"| DB[(.vantage/test-sets/)]
+
+    subgraph Test["Phase 2: Test Mode"]
+        direction TD
+        RE[Replay Engine] -->|"1. Spawns"| TC[(Ephemeral Database
+        via Testcontainers)]
+        TC -.->|"2. Injects DB URL via ENV"| TA2[Target Application]
+        TA2 -.->|"3. Runs Migrations / Auto-Sync"| TC
+        DB -.->|"4. Loads YAML"| RE
+        RE -->|"5. Fires HTTP Request"| TA2
+        TA2 -->|"6. Actual Response"| NF[Noise Filter]
+        DB -.->|"Expected Response"| NF
+        NF -->|"7. Masks UUIDs & Timestamps"| DE[Diff Engine]
+        DE -->|"8. Deep JSON Diff"| TR[Test Report / Terminal]
+    end
+
+    classDef proxy   fill:#2EB9DF,color:#fff,stroke:#0b7ca8,stroke-width:2px;
+    classDef target  fill:#3b82f6,color:#fff,stroke:#1e40af,stroke-width:2px;
+    classDef storage fill:#f59e0b,color:#1a1a1a,stroke:#b45309,stroke-width:2px;
+    classDef engine  fill:#27a644,color:#fff,stroke:#166534,stroke-width:2px;
+    classDef client  fill:#8b5cf6,color:#fff,stroke:#5b21b6,stroke-width:2px;
+
+    class RP proxy;
+    class TA1,TA2 target;
+    class DB,SE storage;
+    class RE,NF,DE,TR,REC_ENG engine;
+    class C client;
+
+    style Record fill:#111827,stroke:#374151,stroke-width:1px,color:#e5e7eb
+    style Test fill:#111827,stroke:#374151,stroke-width:1px,color:#e5e7eb
+
+    linkStyle default stroke:#9ca3af,stroke-width:1.5px
+    linkStyle 1 stroke:#f59e0b,stroke-width:1.5px
+    linkStyle 2 stroke:#f59e0b,stroke-width:1.5px
+    linkStyle 8 stroke:#f59e0b,stroke-width:1.5px
+    linkStyle 10 stroke:#f59e0b,stroke-width:1.5px
+    linkStyle 11 stroke:#f59e0b,stroke-width:1.5px
+`} />
+
+---
 
 ## The Recording Flow
 
-During a recording session, Vantage sits between your client (like Postman or a frontend app) and your API server.
+During a recording session, Vantage sits transparently between your client (Postman, browser, or automated tests) and your backend API.
 
-1. **Proxy Interception**: By starting `vantage record`, the CLI spins up a lightweight Node.js HTTP server (defaulting to port `6789`).
-2. **Forwarding**: You send your traffic to the proxy. If using the Express SDK, the SDK middleware naturally intercepts the Express pipeline. If using Reverse Proxy mode, the proxy blindly forwards packets to your backend port.
-3. **Capture & Serialize**: The request headers, method, path, query parameters, body, and the response are converted into a Keploy-style YAML document.
-4. **Storage**: The YAML is saved to `.vantage/test-set-N/tests/<slug>.yaml`.
+1. **Database Provisioning**: If configured in `vantage.config.yaml`, Vantage spins up an ephemeral database (via Testcontainers) and injects the connection string into your application before booting it.
+2. **Proxy Interception**: Running `vantage record --proxy <port>` boots a lightweight HTTP reverse proxy (defaulting to port `6789`).
+3. **Forwarding**: You send your test traffic to port `6789`. Vantage forwards each request to your actual backend application, waits for the response, and relays it back to the client.
+4. **Capture & Serialize**: On each roundtrip, Vantage captures the HTTP method, path, headers, query parameters, request body, and response body, serializing them into a structured YAML test case.
+5. **Storage**: The test case is saved chronologically in `.vantage/test-set-N/tests/<method>-<slug>-<counter>.yaml`.
 
-```mermaid
-sequenceDiagram
+<Mermaid chart={`sequenceDiagram
     participant Client
-    participant Vantage Proxy
-    participant Your API
+    participant Vantage Proxy (6789)
+    participant Your Server (3000)
+    participant DB as Testcontainer DB
     
-    Client->>Vantage Proxy: POST /api/login
-    Vantage Proxy->>Your API: Forward POST /api/login
-    Your API-->>Vantage Proxy: 200 OK + JWT
-    Vantage Proxy-->>Client: 200 OK + JWT
-    Note over Vantage Proxy: Saves request/response to YAML
-```
+    Client->>Vantage Proxy (6789): POST /api/todos
+    Vantage Proxy (6789)->>Your Server (3000): Forward POST /api/todos
+    Your Server (3000)->>DB: INSERT INTO todos...
+    DB-->>Your Server (3000): Success (id: 1)
+    Your Server (3000)-->>Vantage Proxy (6789): 201 Created + JSON
+    Vantage Proxy (6789)-->>Client: 201 Created + JSON
+    Note over Vantage Proxy (6789): Saves request & response to YAML`} />
 
 ## The Replay Flow
 
-When running `vantage test`, the proxy server is not needed. Instead, the Vantage CLI becomes an HTTP client itself.
+When running `vantage test`, the proxy server is not needed. Instead, the Vantage CLI acts directly as an automated HTTP test runner.
 
-1. **Test Ordering**: The engine reads the `.vantage` folder, loading the test sets. Tests are sorted chronologically by their original recording timestamps. This ensures that stateful workflows (e.g., `POST /users` followed by `GET /users`) are executed in the exact correct order.
-2. **Sanitization**: Hop-by-hop headers (like `Content-Length`) are stripped from the recorded request so that Axios can recalculate them dynamically.
-3. **Execution**: The CLI fires the HTTP requests against your live target application.
-4. **Noise Filtering**: Before comparing the expected response to the actual response, the Noise Filter strips out volatile fields configured in `vantage.config.yaml` (and automatically masks standard UUIDs, Dates, and JWTs).
-5. **Diffing**: A deep JSON diff is performed on the sanitized bodies, and a strict subset-match is performed on the headers.
+1. **Database Provisioning**: If configured, Vantage spins up ephemeral Docker databases (via Testcontainers) and sets up a pristine database state before your app even boots.
+2. **Chronological Ordering**: The engine scans the `.vantage` folder and loads the test set. Tests are sorted by their original recording timestamps to guarantee that stateful workflows (e.g., `POST /todos` followed by `GET /todos`) execute in exact sequential order.
+3. **Sanitization**: Hop-by-hop headers (such as `Host`, `Content-Length`, and `Connection`) are stripped from the recorded request so the HTTP client can recalculate them dynamically.
+4. **Execution**: The CLI fires the HTTP requests against your live target application (`--target`).
+5. **Noise Filtering**: Before comparing responses, Vantage's noise engine masks volatile data (UUIDs, timestamps, dates, JWTs, and any custom fields configured in `vantage.config.yaml`).
+6. **Diffing**: A deep JSON diff is performed on the sanitized bodies, alongside a status code check and header verification. If any unexpected changes occur, a colored terminal diff highlights the regression.
 
-## Integration Modes
+## Why Reverse Proxy?
 
-Vantage offers two ways to capture traffic, depending on your stack.
+Vantage deliberately uses a transparent reverse proxy architecture rather than in-app SDKs or middlewares:
 
-### 1. Express SDK (Node.js)
-If you build in Node.js (Express), you inject a simple middleware `app.use(vantageMiddleware)`. 
-- **Pros**: Fastest performance. Runs entirely in the Node process. No extra network hops.
-- **Cons**: Only supports Express.js natively.
+- **Zero Code Modification**: You never have to install SDK dependencies or modify server initialization logic in your application.
+- **Truly Language-Agnostic**: Works seamlessly with any HTTP backend—Node.js (Express, Fastify, NestJS), Python (FastAPI, Django, Flask), Go, Java (Spring Boot), Ruby on Rails, Rust, or any standard HTTP service.
+- **Production Safety**: No testing libraries or monkey-patching code ever risk leaking into your production builds.
+- **Clean Interception**: Vantage cleanly captures exact raw headers, status codes, and payloads right off the network wire.
 
-### 2. Reverse Proxy (Any Language)
-If you build in Python, Go, Rust, Ruby, etc., you pass the `--proxy <port>` flag. Vantage acts as a dumb TCP/HTTP proxy, recording the payload as it flies past to your backend.
-- **Pros**: Language agnostic. Works with FastAPI, Gin, Rails, etc.
-- **Cons**: Requires managing two ports (the proxy port and the app port) during the recording phase.

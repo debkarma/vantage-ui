@@ -7,50 +7,63 @@ The `vantage.config.yaml` file is the heart of your testing setup. It dictates h
 
 ## Auto-Creation
 
-If you run `vantage test` and a configuration file does not exist, Vantage will automatically generate a boilerplate `vantage.config.yaml` in the root of your project.
+If you run `vantage` and a configuration file does not exist, Vantage will automatically generate a boilerplate `vantage.config.yaml` inside a `.vantage` directory in the root of your project.
 
 ## Full Configuration Reference
 
-Here is a complete, annotated example of a configuration file:
+Here is a complete, annotated example of a configuration file based on the real schema:
 
 ```yaml
-# The command to start your application (optional)
-# If provided, Vantage will start this before testing and kill it after.
-start_command: "npm run dev"
+# Schema version
+version: 1
 
-# Target URL for the test suite
-target: "http://localhost:3000"
+# The port your target application runs on
+app_port: 3000
+
+# The port the Vantage recording proxy runs on
+record_port: 6789
 
 noise:
-  # HTTP Headers to completely ignore during diffing (case-insensitive)
+  # HTTP Headers to completely ignore during diffing
   headers:
-    - date
-    - etag
-    - content-length
-    - x-request-id
+    - Date
+    - ETag
+    - X-Request-Id
+    - Content-Length
+    - Access-Control-Allow-Origin
+    - Vary
 
   # JSON Body fields to ignore (supports dot-notation)
   body_fields:
     - data.createdAt
     - meta.trace_id
 
-# Whether to automatically mask UUIDs, JWTs, and timestamps
-smart_masking: true
+  # Whether to automatically mask UUIDs, JWTs, and timestamps
+  smart_masking: true
+
+  # Requests matching these paths/extensions are ignored during recording
+  ignore_paths:
+    - /_next/
+    - /__vite_ping
+    - .ico
+    - .css
+    - .js
+    - .png
+    - .jpg
+    - .jpeg
+    - .svg
+    - .woff2
 
 containers:
-  # Defines an ephemeral PostgreSQL database via Testcontainers
-  - image: "postgres:15-alpine"
-    ports:
-      - 5432:5432
-    env:
-      POSTGRES_USER: testuser
-      POSTGRES_PASSWORD: testpassword
-      POSTGRES_DB: testdb
+  # Defines an ephemeral database via Testcontainers
+  - type: postgresql # or 'mongodb'
+    image: postgres:15-alpine
+    seed: ./seed.sql # Optional seed file
     # Environment variable exposed to your app with the connection string
     env_var: DATABASE_URL
 
 scripts:
-  # Run a command before the test suite starts (e.g., seeding a DB)
+  # Run a command before the test suite starts
   pre_test: "npx prisma db push"
   
   # Run a command after the test suite finishes
@@ -63,8 +76,11 @@ If a field is omitted from your configuration file, Vantage falls back to these 
 
 | Field | Default Value |
 |-------|---------------|
-| `target` | `http://localhost:3000` |
-| `smart_masking` | `true` |
-| `noise.headers` | `['date', 'etag', 'connection', 'keep-alive']` |
+| `version` | `1` |
+| `app_port` | `3000` |
+| `record_port` | `6789` |
+| `noise.headers` | `['Date', 'ETag', 'X-Request-Id', 'Content-Length', 'Access-Control-Allow-Origin', 'Vary']` |
 | `noise.body_fields`| `[]` (Empty array) |
+| `noise.smart_masking` | `true` |
+| `noise.ignore_paths` | `['/_next/', '/__vite_ping', '.ico', '.css', '.js', '.png', '.jpg', '.jpeg', '.svg', '.woff2']` |
 | `containers` | `[]` (Empty array) |

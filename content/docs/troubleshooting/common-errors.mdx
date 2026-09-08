@@ -29,8 +29,8 @@ Error: connect ECONNREFUSED 127.0.0.1:3000
 **Cause**: Vantage tried to forward traffic to your application, but your application server isn't running, or it bound to a different interface (like IPv6 `::1` instead of IPv4 `127.0.0.1`).
 
 **Solution**: 
-1. Ensure your `start_command` in `vantage.config.yaml` is actually booting the server.
-2. If your app binds to `localhost` on Node.js 18+, it may resolve to IPv6 (`::1`). Try explicitly setting your `target` to `http://127.0.0.1:3000` instead of `localhost`.
+1. Ensure your `-c` startup command (e.g., `-c "npm run dev"`) is actually booting the server correctly on the port you specified.
+2. If your app binds to `localhost` on Node.js 18+, it may resolve to IPv6 (`::1`). Try explicitly passing your target URL via the `--target` flag as `http://127.0.0.1:3000` instead of `localhost`.
 
 ## Content-Length Mismatch
 
@@ -49,8 +49,8 @@ You might notice that actual string values in your database (like a user's name 
 **Solution**: Disable smart masking in your configuration and rely on explicit body field noise instead:
 
 ```yaml
-smart_masking: false
 noise:
+  smart_masking: false
   body_fields:
     - user.id
     - data.token

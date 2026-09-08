@@ -29,26 +29,20 @@ async def create_user(name: str):
 
 ## 2. Configuration
 
-Create a `vantage.config.yaml` file in the root of your project. We need to tell Vantage how to spin up a PostgreSQL database and inject the connection string into the `DATABASE_URL` environment variable.
+Create a `vantage.config.yaml` file in the root of your project. We need to tell Vantage how to spin up a PostgreSQL database and inject the dynamic connection string into the `DATABASE_URL` environment variable.
 
 ```yaml
-start_command: "uvicorn main:app --port 8000"
-target: "http://localhost:8000"
-
 containers:
-  - image: "postgres:15-alpine"
-    ports:
-      - 5432:5432
-    env:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: userdb
+  - type: postgresql
+    image: postgres:15-alpine
     env_var: DATABASE_URL
 
 scripts:
-  # Assuming you have a script to run DB migrations before testing
-  pre_test: "python migrate.py"
+  # Run DB migrations before testing starts
+  pre_test: "alembic upgrade head"
 ```
+
+> **Note:** Vantage handles ports and database credentials dynamically using Testcontainers. Do not hardcode ports or passwords in the configuration file!
 
 ## 3. Recording Traffic
 
@@ -64,21 +58,21 @@ Vantage is now proxying traffic on port `6789`. Send a test request using curl o
 curl -X POST http://localhost:6789/users -H "Content-Type: application/json" -d '{"name": "Alice"}'
 ```
 
-Vantage intercepts the request, forwards it to FastAPI, captures the `200 OK` response, and saves it to `.vantage/test-set-1/001-post-users.yaml`. Press `q` to exit the recording session.
+Vantage intercepts the request, forwards it to FastAPI, captures the `200 OK` response, and saves it to `.vantage/test-set-0/tests/001-post-users.yaml`. Press `q` to exit the recording session.
 
 ## 4. Replaying the Tests
 
 Now, run the test suite:
 
 ```bash
-vantage test
+vantage test -c "uvicorn main:app --port 8000"
 ```
 
 Here is exactly what happens in the background:
 1. Vantage pulls the `postgres:15-alpine` Docker image.
-2. It starts a fresh container and waits for it to become healthy.
-3. It constructs the connection string (`postgresql://admin:password123@localhost:5432/userdb`) and injects it into `DATABASE_URL`.
-4. It executes `python migrate.py` to create the users table in the fresh database.
+2. It starts a fresh container mapped to a random open port and waits for it to become healthy.
+3. It constructs the connection string (e.g., `postgresql://test:test@localhost:32847/test`) and injects it into `DATABASE_URL`.
+4. It executes `alembic upgrade head` to create the users table in the fresh database.
 5. It boots your FastAPI server via `uvicorn main:app --port 8000`.
 6. It sends the recorded POST request to your server.
 7. It verifies the response matches perfectly.

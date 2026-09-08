@@ -3,49 +3,78 @@ title: Lifecycle Scripts
 description: Execute shell commands before and after your test suite runs.
 ---
 
-Sometimes spinning up a database via Testcontainers isn't enough. Your database might be completely empty, but your API expects certain tables, schema migrations, or seed data to exist before it can process requests.
+import { Mermaid } from '@/components/docs/mermaid';
 
-You can handle this using **Lifecycle Scripts**.
+Testing stateful applications often requires preparing external dependencies before tests execute—such as running database migrations, pushing schema definitions, or populating initial seed fixtures.
 
-## The `scripts` block
+Vantage provides **Lifecycle Scripts** to run automated shell commands at predetermined points in the test execution workflow.
 
-In your `vantage.config.yaml`, you can define shell commands to run at specific points during the testing lifecycle.
+## The `scripts` Block
+
+Lifecycle scripts are configured under the `scripts` object in `.vantage/vantage.config.yaml`:
 
 ```yaml
 scripts:
   pre_test: "npx prisma db push && npx prisma db seed"
-  post_test: "echo 'Tests finished!'"
+  post_test: "node ./scripts/cleanup.js"
 ```
 
-## Execution Order
+| Field | Type | Description |
+|-------|------|-------------|
+| `pre_test` | `string` | Synchronous command executed before the target application boots and tests replay. |
+| `post_test` | `string` | Teardown command executed after tests complete and the app is stopped. |
 
-Vantage orchestrates the entire workflow in a very specific order to ensure your scripts have access to the right environment:
+## Execution Lifecycle
 
-1. **Containers Start**: All defined Testcontainers are spun up.
-2. **Environment Injected**: Variables like `DATABASE_URL` are exported to the active shell.
-3. **`pre_test` Executed**: Your pre-test script runs. Because the environment variables have already been injected, commands like `prisma db push` will automatically connect to the ephemeral Docker database rather than your local dev database.
-4. **App Starts**: Your application is booted using the `start_command`.
-5. **Tests Run**: The API traffic is replayed.
-6. **App Stops**: The application process is gracefully terminated.
-7. **`post_test` Executed**: Your teardown script runs.
-8. **Containers Destroyed**: Docker cleans up the ephemeral databases.
+Vantage coordinates containers, lifecycle scripts, application processes, and test replay in a strict, predictable sequence:
+
+<Mermaid chart={`
+graph TD
+    A["1. Start Containers"] --> B["2. Inject Env"]
+    B --> C["3. pre_test"]
+    C --> D["4. Spawn App"]
+    D --> E["5. Replay Tests"]
+    E --> F["6. Stop App"]
+    F --> G["7. post_test"]
+    G --> H["8. Stop Containers"]
+    H --> I["9. Generate Reports"]
+`} />
+
+1. **Containers Start**: Any Testcontainers defined in `containers` are pulled and started.
+2. **Environment Assembled**: Connection strings (such as `DATABASE_URL`) are resolved from the ephemeral container ports.
+3. **`pre_test` Runs**: The script executes synchronously with container environment variables injected. If `pre_test` fails, test execution is aborted immediately to avoid running against unready dependencies.
+4. **Target App Boots**: If an application command is provided via the CLI (`-c` or `--app-command`), Vantage spawns your target application process with the injected environment variables and waits any specified `--delay`.
+5. **Tests Replay**: Recorded HTTP interactions are replayed against the target application.
+6. **Target App Stops**: Vantage gracefully terminates the child application process.
+7. **`post_test` Runs**: Your teardown script executes inside a guarded cleanup block.
+8. **Containers Destroyed**: Active Testcontainers are halted and removed from Docker.
+9. **Reports Generated**: Test results and JUnit XML reports (in `--ci` mode) are written to disk.
 
 ## Common Use Cases
 
-### Prisma Migrations
+### Prisma Migrations & Seeding
 
-If you use an ORM like Prisma, you need to push your schema to the fresh database before starting the app.
+Ensure an ephemeral PostgreSQL container has the latest schema before the application boots:
 
 ```yaml
 scripts:
   pre_test: "npx prisma db push"
 ```
 
-### Cache Warming
+Because `pre_test` inherits the dynamic `DATABASE_URL` resolved from Testcontainers, Prisma targets the fresh container rather than your local development database.
 
-If your application relies on an external Redis cache that takes time to populate, you can run a warming script prior to testing.
+### File-based Fixture Cleanup
+
+Purge temporary uploads or mock storage generated during API testing:
 
 ```yaml
 scripts:
-  pre_test: "ts-node ./scripts/warm-cache.ts"
+  post_test: "rm -rf ./tmp/test-uploads"
 ```
+
+## Error Handling & Cleanup Guarantees
+
+- **`pre_test` Failures**: If your `pre_test` command exits with a non-zero exit code, Vantage catches the error, skips replaying tests, kills the application process (if already spawned), and immediately tears down containers to prevent orphaned resources.
+- **`post_test` Guarantees**: `post_test` executes inside a `finally` block. Even if individual test cases fail or throw exceptions, `post_test` will run. Furthermore, even if `post_test` itself throws an error, container cleanup (`stopContainers`) is guaranteed.
+- **Interrupts (`SIGINT`)**: If you cancel testing via `Ctrl+C`, Vantage's signal listener intercepts the event and tears down running containers before exiting.
+

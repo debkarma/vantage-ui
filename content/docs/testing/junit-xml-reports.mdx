@@ -3,55 +3,84 @@ title: JUnit XML Reports
 description: Generate standard JUnit XML reports for CI dashboards.
 ---
 
-While the terminal output is great for local development, CI/CD platforms usually require test results in a structured format to generate visual test reports and identify flaky tests.
+While Vantage's interactive Ink terminal UI is ideal for local development, CI/CD pipelines require machine-readable outputs to display test widgets, capture timing metrics, and publish Pull Request annotations.
 
-Vantage natively supports exporting test results to the industry-standard **JUnit XML format**.
+Vantage natively generates standard **JUnit XML reports** during every automated test run.
 
-## Generating the Report
+---
 
-To generate an XML report, append the `--reporter=junit` flag to your test command:
+## Automatic Generation via `--ci`
 
-```bash
-vantage test --ci -c "npm start" --reporter=junit
-```
-
-By default, this will create a `vantage-report.xml` file in the root of your project directory.
-
-## Changing the Output Path
-
-If you need the report saved in a specific directory (for example, an artifacts directory your CI provider expects), use the `--output` flag:
+You do not need to configure third-party reporters or extra flags. Whenever you execute `vantage test` with the `--ci` flag, Vantage automatically serializes the run results into JUnit XML:
 
 ```bash
-vantage test --ci --reporter=junit --output=./test-results/vantage.xml
+vantage test --ci -c "npm start"
 ```
+
+### Report Storage Location
+Reports are organized hierarchically inside your `.vantage` directory:
+
+```text
+.vantage/
+└── reports/
+    └── test-run-1/
+        ├── test-set-0-report.yaml    # Detailed YAML summary
+        └── test-set-0-junit.xml     # Standard JUnit XML
+```
+
+---
+
+## Anatomy of a Vantage JUnit Report
+
+Vantage populates the XML with granular test metadata, timing in seconds, and sanitized failure diffs:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Vantage Test Set 0" tests="3" failures="1" errors="0" time="0.320">
+  <testcase name="post-api-users-1" classname="VantageReplay" time="0.120" />
+  <testcase name="get-api-users-1" classname="VantageReplay" time="0.095" />
+  <testcase name="delete-api-users-1" classname="VantageReplay" time="0.105">
+    <failure message="Failure: STATUS_CODE_CHANGED (Expected 204, got 500)">
+Body Diffs:
++ {"message": "Internal Server Error"}
+- ""
+    </failure>
+  </testcase>
+</testsuite>
+```
+
+- **`testcase name`**: Matches the deterministic test slug (e.g. `post-api-users-1`).
+- **`classname`**: Tagged as `VantageReplay` for filtering in enterprise test dashboards.
+- **`<failure>` Node**: Embeds the exact failure category along with the addition (`+`) and deletion (`-`) diffs.
+
+---
 
 ## Consuming Reports in CI
 
 ### GitHub Actions
-
-You can use third-party actions to read the JUnit XML and create inline annotations on your Pull Requests:
+Use an action like `mikepenz/action-junit-report` to parse Vantage's XML output and display inline failure annotations directly on PR file diffs:
 
 ```yaml
 - name: Run Vantage Tests
-  run: vantage test --ci -c "npm start" --reporter=junit
+  run: vantage test --ci -c "npm start" --delay 5
 
 - name: Publish Test Report
   uses: mikepenz/action-junit-report@v4
-  if: success() || failure() # always run even if tests fail
+  if: always() # Publish even if tests fail
   with:
-    report_paths: 'vantage-report.xml'
+    report_paths: '.vantage/reports/**/*.xml'
 ```
 
 ### GitLab CI
-
-GitLab natively understands JUnit XML files and will display them in the MR widget. You simply need to expose the file as a report artifact:
+GitLab natively parses JUnit XML. Add the glob path to your `artifacts.reports.junit` block:
 
 ```yaml
 vantage_tests:
   script:
-    - vantage test --ci -c "npm start" --reporter=junit
+    - vantage test --ci -c "npm start" --delay 5
   artifacts:
     when: always
     reports:
-      junit: vantage-report.xml
+      junit: .vantage/reports/**/test-set-*-junit.xml
 ```
+

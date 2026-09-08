@@ -3,55 +3,69 @@ title: Testcontainers
 description: Spin up ephemeral databases automatically using Docker.
 ---
 
-Testing stateful APIs is notoriously difficult because tests mutate the database. If a test deletes a user, the next time you run the suite, the user won't exist, and the test will fail.
+Testing stateful APIs is notoriously difficult because tests mutate database records. If a test deletes a user, subsequent test runs might fail because that user record no longer exists.
 
-Vantage solves this by deeply integrating with **Testcontainers**. Vantage can automatically spin up fresh, ephemeral Docker containers (like PostgreSQL or MongoDB) immediately before your tests run, and tear them down immediately after. 
+Vantage solves this by deeply integrating with **Testcontainers**. Vantage can automatically spin up fresh, ephemeral Docker containers (PostgreSQL or MongoDB) before running your tests, seed them with initial state, and tear them down immediately upon completion.
 
-This guarantees a completely clean slate for every single test run.
+This guarantees an isolated, repeatable slate for every test run without requiring manual database resets.
 
-## Defining a Container
+## Configuration Schema
 
-You define dependencies in the `containers` block of your `vantage.config.yaml`.
-
-### PostgreSQL Example
+Containers are configured in the `containers` array of `.vantage/vantage.config.yaml`:
 
 ```yaml
 containers:
-  - image: "postgres:15-alpine"
-    ports:
-      - 5432:5432
-    env:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydb
+  - type: postgresql # or 'mongodb'
+    image: postgres:15-alpine # optional custom image
+    seed: ./test/seed.sql # optional seed script
+    env_var: DATABASE_URL # required env var to inject
+```
+
+### Supported Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | `'postgresql' \| 'mongodb'` | **Yes** | The database engine to launch. |
+| `image` | `string` | No | Custom Docker image tag. Defaults to `postgres:15` or `mongo:6.0`. |
+| `seed` | `string` | No | Path to a `.sql`, `.js`, or `.sh` seed script mounted into `/docker-entrypoint-initdb.d/`. |
+| `env_var` | `string` | **Yes** | The environment variable name where the dynamic connection string will be injected. |
+
+> [!NOTE]
+> Currently, Vantage natively supports **PostgreSQL** and **MongoDB**. Generic containers or other engines like Redis are not supported.
+
+## Examples
+
+### PostgreSQL with SQL Seed
+
+```yaml
+containers:
+  - type: postgresql
+    image: postgres:15-alpine
+    seed: ./fixtures/init.sql
     env_var: DATABASE_URL
 ```
 
-### How it works
+When started, Vantage mounts `./fixtures/init.sql` into the container's entrypoint directory, ensuring tables and initial rows are populated before your app receives traffic.
 
-1. You run `vantage test`.
-2. Vantage reads the config and asks Docker to pull and start `postgres:15-alpine`.
-3. Vantage waits for the container's designated port (5432) to become healthy and accept connections.
-4. Vantage constructs a connection string (e.g., `postgresql://myuser:mypassword@localhost:5432/mydb`).
-5. Vantage injects that connection string into the `DATABASE_URL` environment variable.
-6. Vantage starts your application. Your application connects to the fresh database.
-7. The tests run.
-8. The container is destroyed, leaving no trace on your system.
-
-## MongoDB Example
-
-You can use the exact same pattern for MongoDB or Redis.
+### MongoDB with Init Script
 
 ```yaml
 containers:
-  - image: "mongo:6"
-    ports:
-      - 27017:27017
-    env:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+  - type: mongodb
+    image: mongo:6.0
+    seed: ./fixtures/init-mongo.js
     env_var: MONGO_URI
 ```
 
+## How It Works
+
+1. **Random Port Allocation**: Testcontainers binds to an ephemeral, randomly assigned host port (not fixed ports like `5432` or `27017`). This avoids port collisions with local databases or concurrent CI jobs.
+2. **Readiness Verification**: Vantage waits for internal database health checks to confirm the instance is ready to accept connections.
+3. **Connection String Formatting**:
+   - **PostgreSQL**: Automatically ensures the connection string uses the standardized `postgresql://` URI scheme (compatible with Prisma, Drizzle, and SQLAlchemy).
+   - **MongoDB**: Automatically appends `?directConnection=true` to ensure drivers (like Mongoose) communicate directly with the container host rather than attempting internal replica topology discovery.
+4. **Environment Injection**: Vantage injects the connection string into the designated `env_var` (e.g. `DATABASE_URL`).
+5. **Teardown & Cleanup**: Once tests complete—or if a run is interrupted via `Ctrl+C` (`SIGINT`)—Vantage halts and destroys the containers cleanly.
+
 > [!WARNING]
-> Your host machine must have Docker installed and the Docker daemon running to use Testcontainers.
+> Your environment must have Docker installed and the Docker daemon running to use Testcontainers.

@@ -3,22 +3,29 @@ title: CI/CD Integration
 description: Integrate Vantage into your automated pipelines.
 ---
 
-Vantage is designed to run seamlessly in Continuous Integration (CI) environments. It can spin up your app, run the tests, and output machine-readable reports.
+Vantage is built for automated Continuous Integration (CI) environments. It manages application lifecycle, boots isolated ephemeral databases, and outputs industry-standard test reports.
 
 ## The `--ci` Flag
 
-When running in a pipeline, always use the `--ci` flag. This disables interactive terminal formatting (like spinners and colors) and ensures the exit code correctly reflects the test suite's status.
+When executing in a headless CI pipeline, always pass the `--ci` flag:
 
 ```bash
-vantage test --ci -c "npm start"
+vantage test --ci -c "npm start" --delay 5
 ```
+
+### What `--ci` Does:
+- **Headless Mode**: Replaces the interactive terminal UI with clean, streamable stdout text.
+- **Exit Codes**: Exits with status code `0` when all tests pass, and code `1` if any regression or assertion fails.
+- **JUnit XML Generation**: Automatically generates a standardized JUnit XML test report under `.vantage/reports/`.
+
+---
 
 ## GitHub Actions
 
-Here is a complete workflow file for running Vantage in GitHub Actions.
+Here is an enterprise-grade GitHub Actions workflow that runs Vantage tests and publishes the resulting test summary directly to your Pull Requests:
 
 ```yaml
-name: Vantage Tests
+name: Vantage API Tests
 
 on:
   push:
@@ -29,41 +36,67 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          
-      - name: Install dependencies
+          cache: 'npm'
+
+      - name: Install Application Dependencies
         run: npm ci
-        
-      - name: Install Vantage
+
+      - name: Install Vantage CLI
         run: npm install -g vantage-cli
-        
-      - name: Run Vantage Tests
-        run: vantage test --ci -c "npm start"
+
+      # If your vantage.config.yaml uses containers, Docker is already 
+      # running and ready on GitHub's ubuntu-latest runners.
+      - name: Execute Vantage Tests
+        run: vantage test --ci -c "npm start" --delay 5
+
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v4
+        if: always() # Always publish reports even if tests fail
+        with:
+          report_paths: '.vantage/reports/**/*.xml'
 ```
 
-> [!TIP]
-> If your application uses Testcontainers, ensure your GitHub Actions runner has Docker installed and running. (The `ubuntu-latest` runner comes with Docker pre-installed).
+---
 
 ## GitLab CI
 
-Here is an equivalent configuration for GitLab CI:
+Here is an equivalent pipeline configuration for GitLab CI taking advantage of GitLab's native JUnit report ingestion:
 
 ```yaml
 vantage_tests:
   image: node:20
   stage: test
   services:
-    - docker:dind # Required if using Testcontainers
+    - docker:dind # Required if using Testcontainers in vantage.config.yaml
   variables:
     DOCKER_HOST: tcp://docker:2375
-  script:
+  before_script:
     - npm ci
     - npm install -g vantage-cli
-    - vantage test --ci -c "npm start"
+  script:
+    - vantage test --ci -c "npm start" --delay 5
+  artifacts:
+    when: always
+    reports:
+      junit: .vantage/reports/**/test-set-*-junit.xml
 ```
+
+---
+
+## Testing Against Deployed Staging Environments
+
+You can also use Vantage inside CD deployment pipelines (e.g. post-deploy smoke testing) by using the `--target` flag:
+
+```bash
+vantage test --ci --target https://staging-api.mycompany.com
+```
+

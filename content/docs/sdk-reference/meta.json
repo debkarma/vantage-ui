@@ -1,7 +1,0 @@
-{
-  "title": "SDK Reference",
-  "pages": [
-    "express-middleware",
-    "reverse-proxy-mode"
-  ]
-}

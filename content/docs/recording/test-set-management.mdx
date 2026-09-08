@@ -3,49 +3,72 @@ title: Test Set Management
 description: Organize your recorded traffic into distinct, replayable test suites.
 ---
 
-Vantage organizes your recorded API traffic into grouped folders called **Test Sets**. A Test Set represents a specific recording session or a logical grouping of API workflows.
+Vantage organizes your recorded API traffic into indexed directories called **Test Sets**. Each Test Set represents a self-contained recording session of an API workflow.
 
 ## Directory Structure
 
-All test sets are saved locally in the `.vantage` folder at the root of your project.
+All test sets and reports are stored locally in the `.vantage` folder at the root of your project:
 
 ```text
 .vantage/
+├── test-set-0/
+│   └── tests/
+│       ├── post-api-v1-users-1.yaml
+│       ├── get-api-v1-users-1.yaml
+│       └── delete-api-v1-users-1.yaml
 ├── test-set-1/
-│   ├── 001-post-users.yaml
-│   ├── 002-get-users.yaml
-│   └── 003-delete-users.yaml
-└── test-set-2/
-    ├── 001-post-login.yaml
-    └── 002-get-profile.yaml
+│   └── tests/
+│       ├── post-auth-login-1.yaml
+│       └── get-auth-profile-1.yaml
+└── reports/
+    └── test-run-1/
+        ├── test-set-1-report.yaml
+        └── test-set-1-junit.xml
 ```
 
-The numeric prefix on each YAML file guarantees that Vantage will replay the requests in the exact chronological order they were recorded. This is critical for stateful API workflows where resources must be created before they can be fetched or deleted.
+## Chronological Replay Guarantee
+
+Captured test cases are named with deterministic slugs (`<method>-<path-slug>-<counter>.yaml`). 
+
+When replaying, Vantage **inspects the high-precision ISO-8601 timestamp in `metadata.created_at`** of each YAML file and sorts them chronologically. This guarantees stateful execution order: records are created before they are read, updated, or deleted.
 
 ## Creating a Test Set
 
-By default, running `vantage record` creates a new test set incrementally (e.g., if `test-set-1` exists, it creates `test-set-2`).
-
-To record traffic into a specific test set, use the `--test-set` flag:
+Every time you run `vantage record`, Vantage automatically scans your `.vantage` directory and creates the next incremental test set (e.g., `test-set-0`, `test-set-1`, `test-set-2`):
 
 ```bash
-vantage record --test-set auth-flow
+vantage record -c "npm run dev" --proxy 3000
 ```
 
 ## Listing Test Sets
 
-To view all available test sets in your project, use the `list` command:
+To inspect all recorded test sets and see how many tests each contains, run:
 
 ```bash
 vantage list
 ```
 
-This will output a summary of your test sets and the number of tests contained within each.
+This renders an interactive CLI view displaying each test set index, directory path, and total test count.
 
-## Replaying a Specific Test Set
+## Replaying Test Sets
 
-By default, `vantage test` will replay every test set sequentially. If you are debugging a specific workflow and only want to run a single suite, target it with the `--test-set` flag:
+### Replay Latest Session (Default)
+By default, running `vantage test` automatically targets and replays the **most recently recorded** test set:
 
 ```bash
-vantage test --test-set auth-flow
+vantage test -c "npm run dev"
 ```
+
+### Replay a Specific Test Set
+To target a specific historical test suite, pass the `--test-set` flag with the test set folder name:
+
+```bash
+vantage test --test-set test-set-0 -c "npm run dev"
+```
+
+## Test Reports & CI Artifacts
+
+Whenever a test set is replayed, Vantage generates execution reports under `.vantage/reports/test-run-<run-index>/`:
+- **YAML Summary (`test-set-X-report.yaml`)**: Full assertion diffs and timing metrics.
+- **JUnit XML (`test-set-X-junit.xml`)**: Standardized XML format directly consumable by GitHub Actions, GitLab CI, Jenkins, and CircleCI.
+

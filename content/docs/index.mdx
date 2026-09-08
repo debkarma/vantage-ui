@@ -3,6 +3,8 @@ title: Introduction
 description: Meet Vantage, the API testing tool that writes its own tests.
 ---
 
+import { Check, X } from 'lucide-react';
+
 Vantage is an ultra-fast, zero-config API testing tool that automatically generates and replays end-to-end tests by intercepting your HTTP traffic. 
 
 No more writing tedious boilerplate tests. Just start your app, run your standard manual test flows (via Postman, curl, or your frontend), and Vantage will automatically record the requests, responses, and database state.
@@ -18,6 +20,19 @@ Vantage flips this paradigm:
 - **Zero-config recording:** Intercept traffic with a single command.
 - **Deterministic replay:** Ephemeral Docker databases are spun up for every test run, ensuring your tests never flake due to polluted state.
 - **No vendor lock-in:** Export your recorded traffic to native Jest or Pytest suites at any time.
+
+## Vantage vs. The Market
+
+While tools like Postman and Bruno are excellent for *manually exploring* APIs, Vantage is built for **automated regression testing**. 
+
+| Feature | Postman / Insomnia | Bruno | Keploy | **Vantage** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Category** | API Platform / Client | API Client | Record & Replay | **Record & Replay** |
+| **Test Creation** | Manual Scripting | Manual Scripting | Auto-generated (eBPF) | **Auto-generated (Proxy)** |
+| **Database Isolation**| DIY | DIY | DIY | **Built-in (Testcontainers)** |
+| **Export to Code** | <X size={18} className="text-red-500 inline-block" /> | <X size={18} className="text-red-500 inline-block" /> | <X size={18} className="text-red-500 inline-block" /> | **<Check size={18} className="text-green-500 inline-block" /> (Jest / Pytest)** |
+| **Storage & Privacy** | Cloud-first / Sync | Git-native / Local | Local YAML | **Git-native / Local YAML** |
+
 
 ## Core Features
 

@@ -3,22 +3,28 @@ title: What Gets Captured
 description: Understand exactly what data Vantage intercepts and saves to your test files.
 ---
 
-When Vantage intercepts an HTTP transaction, it serializes the exact state of the request and response into a human-readable YAML file. These files serve as both the documentation of your API and the source of truth for your test suite.
+When Vantage intercepts an HTTP transaction, it serializes the exact state of the request and response into a human-readable YAML file. These files serve as both the documentation of your API and the source of truth for your test suite, and are saved directly to `.vantage/test-set-<index>/tests/`.
 
 ## The Test File Structure
 
-A standard captured test file looks like this:
+Captured test files are deterministic and auto-named based on their method and path (e.g. `post-api-v1-users-1.yaml`). A standard captured test file looks like this:
 
 ```yaml
-id: req_1a2b3c
-method: POST
-path: /api/v1/users
-headers:
-  content-type: application/json
-  authorization: Bearer token123
-request_body:
-  email: test@example.com
-  name: Alice
+id: post-api-v1-users-1
+metadata:
+  created_at: '2023-10-25T14:30:00.000Z'
+  app_port: 3000
+  vantage_version: 1.0.0
+request:
+  method: POST
+  path: /api/v1/users
+  headers:
+    content-type: application/json
+    authorization: Bearer token123
+  query: {}
+  body:
+    email: test@example.com
+    name: Alice
 response:
   status: 201
   headers:
@@ -27,28 +33,39 @@ response:
     id: user_9x8y7z
     email: test@example.com
     name: Alice
-    created_at: '2023-10-25T14:30:00Z'
+curl: |
+  curl --request POST \
+    --url http://localhost:3000/api/v1/users \
+    --header 'content-type: application/json' \
+    --header 'authorization: Bearer token123' \
+    --data '{"email":"test@example.com","name":"Alice"}'
 ```
+
+> [!TIP]
+> **Deep JSON Diffing:** Notice that `request.body` and `response.body` are serialized as native YAML objects, not stringified JSON. This is why Vantage's replay engine can perform deep structural diffs (ignoring key order) rather than brittle text comparisons!
 
 ## Request Capture
 
 Vantage captures the following request properties:
 - **Method**: The HTTP method (GET, POST, PUT, DELETE, etc.).
-- **Path**: The endpoint URL, including any query parameters.
-- **Headers**: All incoming HTTP headers. Hop-by-hop headers (like `Connection` or `Transfer-Encoding`) are automatically stripped.
-- **Body**: The parsed request payload. JSON bodies are parsed into native YAML structures for easy reading and diffing.
+- **Path**: The endpoint URL path.
+- **Query**: Parsed URL query parameters stored as a key-value object.
+- **Headers**: All incoming HTTP headers. Hop-by-hop headers (like `Connection` or `Host`) are automatically stripped.
+- **Body**: The parsed request payload. JSON bodies become native YAML, while binary buffers are captured as base64 data URIs.
+- **cURL**: An auto-generated, executable `curl` command allowing you to manually replay the exact transaction.
 
 ## Response Capture
 
 Vantage captures the following response properties:
 - **Status Code**: The HTTP status code returned by your server.
 - **Headers**: The outgoing HTTP headers.
-- **Body**: The parsed response payload.
+- **Body**: The parsed response payload (also serialized as native YAML for JSON).
 
-## Limitations
+## Current Limitations
 
-Currently, Vantage is optimized for standard REST and GraphQL JSON APIs. It does not capture:
+Currently, Vantage is optimized for **standard REST JSON APIs**. Because of its reverse-proxy, payload-buffering architecture, it does not support:
+- **GraphQL (Limited UX)**
 - **WebSocket connections**
 - **Server-Sent Events (SSE)**
-- **Large binary file uploads** (multipart/form-data support is limited)
-- **Streaming responses**
+- **Large binary file uploads** (multipart/form-data support is currently limited)
+- **Streaming responses** (The proxy buffers the entire response before forwarding, which breaks active streaming)

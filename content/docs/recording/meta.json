@@ -1,7 +1,6 @@
 {
   "title": "Recording",
   "pages": [
-    "recording-with-express-sdk",
     "recording-with-reverse-proxy",
     "what-gets-captured",
     "test-set-management"

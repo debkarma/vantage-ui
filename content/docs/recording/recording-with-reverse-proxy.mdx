@@ -1,42 +1,27 @@
 ---
 title: Recording with Reverse Proxy
-description: Record API traffic from any language or framework using the Vantage reverse proxy.
+description: Record API traffic from any language or framework using Vantage's zero-code reverse proxy.
 ---
 
 import { Mermaid } from '@/components/docs/mermaid';
 
-If your backend is written in Python, Go, Ruby, or any language other than Node.js, you can use the Vantage Reverse Proxy to intercept traffic. This mode is completely language-agnostic and requires zero code modifications to your application.
+Vantage records API traffic using a lightweight, transparent reverse proxy. This architecture is **completely language-agnostic and requires zero code changes**—whether your backend is built with Node.js, Python, Go, Java, Ruby, or Rust.
 
 ## How the Proxy Works
 
-Instead of modifying your code, Vantage spins up a lightweight proxy server that sits in front of your application. You send your HTTP requests to the proxy, which records the transaction and forwards it to your actual backend.
+Instead of requiring code modifications or proprietary SDKs, Vantage sits in front of your application server. You send your HTTP requests to the Vantage proxy port, which records each request and its real response before forwarding it to your backend.
 
 <Mermaid chart={`graph LR
-    Client[Client / Postman] -->|HTTP :6789| Proxy[Vantage Proxy]
+    Client[Client / Postman / Frontend] -->|HTTP :6789| Proxy[Vantage Proxy]
     Proxy -->|HTTP :3000| App[Your Application]
-    Proxy -.->|Saves to| FS[.vantage/ tests]`} />
+    Proxy -.->|Saves to| FS[.vantage/tests]`} />
 
-## Starting the Proxy
+## Starting a Recording Session
 
-To start recording via the reverse proxy, use the `vantage record` command and specify the port your application is running on using the `--proxy` flag.
-
-```bash
-vantage record -c "python main.py" --proxy 5000
-```
-
-In this example:
-1. Vantage runs your server startup command (`python main.py`).
-2. Your server starts on port `5000`.
-3. Vantage starts a proxy server on port `6789`.
-4. You send your API requests to `http://localhost:6789`.
-
-## FastAPI Example
-
-Here is how you would record traffic for a standard Python FastAPI application:
+To start recording, run `vantage record` with:
+- `-c` (or `--command`): The command that starts your application.
+- `--proxy`: The port your application server listens on.
 
 ```bash
-# Start Vantage in proxy mode
-vantage record -c "uvicorn main:app --port 8000" --proxy 8000
+vantage record -c "npm run dev" --proxy 3000
 ```
-
-Now, instead of sending your requests to `localhost:8000`, send them to `localhost:6789`. Vantage will record the incoming request, forward it to your FastAPI server, capture the response, and generate a reproducible test case.

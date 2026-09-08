@@ -1,54 +1,139 @@
 ---
 title: Export to Jest
-description: Generate native Jest and Supertest test suites from your recorded traffic.
+description: Generate native Jest and Supertest test suites from your recorded traffic with zero vendor lock-in.
 ---
 
-While Vantage's built-in test runner is incredibly fast and powerful, you might want to integrate your tests into an existing JavaScript testing ecosystem. Vantage allows you to export your recorded YAML test sets into native `jest` and `supertest` code.
+While Vantage's built-in test runner provides blazing-fast interactive diffing and CI execution, you may want to integrate recorded tests into an existing JavaScript or TypeScript test suite. 
+
+Vantage allows you to export your recorded YAML test sets into standalone CommonJS test suites (`.test.cjs`) powered by **Jest** and **Supertest**.
+
+---
 
 ## Generating the Code
 
-To export your test suite to Jest, run the `export` command and specify the path to your Express app's entry file:
+Run the `export` command with `--format jest`:
 
 ```bash
-vantage export --format jest --app-entry ./src/app.ts --output ./tests/generated
+vantage export --format jest --app-entry ../../src/app --out ./__tests__/vantage
 ```
+
+### CLI Options
+
+| Flag | Description | Default |
+| :--- | :--- | :--- |
+| `--format` | Target framework. Must be `jest` or `pytest`. | *(Required)* |
+| `--app-entry` | Relative module path to your Node/Express app instance. | `../../src/app` |
+| `--test-set` | Which recorded test set to export (e.g., `test-set-0`). | Latest recorded test set |
+| `--out` | Output directory for the generated test file. | `__tests__/vantage` |
+
+> **Note:** Vantage generates CommonJS files named `<test-set-name>.test.cjs` (for example, `test-set-0.test.cjs`). Using `.test.cjs` guarantees seamless execution across both ESM (`"type": "module"`) and CommonJS Node.js repositories without requiring additional Babel or `ts-jest` compilation.
+
+---
 
 ## How It Works
 
-Vantage reads your YAML files and translates them into an equivalent `supertest` implementation. 
+Vantage reads your recorded YAML test cases and translates them into native `supertest` assertions against your application instance.
 
-If your test set looks like this:
+### 1. Recorded YAML Baseline
+
+Given a recorded test case in `.vantage/test-set-0/tc-001.yaml`:
 
 ```yaml
-method: POST
-path: /api/users
-headers:
-  authorization: Bearer my-token
-request_body:
-  name: Alice
+id: tc-1725800000000
+request:
+  method: POST
+  path: /api/users
+  headers:
+    authorization: Bearer my-token
+    content-type: application/json
+  body:
+    name: Alice
 response:
   status: 201
+  body:
+    id: usr_89213
+    name: Alice
+    createdAt: 1725800000000
 ```
 
-Vantage generates this native Jest test:
+### 2. Generated Jest Test (`test-set-0.test.cjs`)
 
-```typescript
-import request from 'supertest';
-import app from '../src/app';
+Vantage generates the following standalone Jest test:
 
-describe('Vantage Test Suite', () => {
-  it('POST /api/users', async () => {
-    const response = await request(app)
+```javascript
+const request = require('supertest');
+let app;
+let server;
+
+describe('Vantage API Tests (sequential)', () => {
+  beforeAll(() => {
+    app = require('../../src/app');
+    server = app.default || app;
+  });
+
+  it('tc-1725800000000 — POST /api/users', async () => {
+    const res = await request(server)
       .post('/api/users')
       .set('authorization', 'Bearer my-token')
-      .send({ name: 'Alice' });
+      .set('content-type', 'application/json')
+      .send({"name":"Alice"});
 
-    expect(response.status).toBe(201);
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      "id": expect.any(String),
+      "name": "Alice",
+      "createdAt": expect.any(Number)
+    });
   });
 });
 ```
 
-## Benefits of Jest Export
+---
 
-- **In-Memory Testing**: `supertest` binds directly to your Express app instance without spinning up a real HTTP server on an open port. This allows the tests to run extremely fast.
-- **Zero Vendor Lock-in**: You own the generated code. If you ever decide to stop using Vantage, you still have a full, native test suite that you can commit to your repository and maintain manually.
+## Key Exporter Features
+
+### 1. Noise-Filtered Asymmetric Matchers
+If dynamic fields like timestamps, generated IDs, or UUIDs are configured in your `noise.body_fields` (in `vantage.config.yaml`), Vantage replaces hardcoded values in `res.body` assertions with Jest asymmetric matchers:
+- **Strings** &rarr; `expect.any(String)`
+- **Numbers** &rarr; `expect.any(Number)`
+- **Booleans** &rarr; `expect.any(Boolean)`
+- **Arrays** &rarr; `expect.any(Array)`
+
+This prevents flaky tests when auto-incrementing database IDs or timestamps change during subsequent Jest runs.
+
+### 2. Automated Testcontainers Integration
+If containers (such as MongoDB) are configured in your `vantage.config.yaml`, Vantage automatically injects `@testcontainers` lifecycle hooks directly into the generated file:
+
+```javascript
+const { MongoDBContainer } = require('@testcontainers/mongodb');
+const mongoose = require('mongoose');
+let mongoContainer;
+let app;
+let server;
+
+describe('Vantage API Tests (sequential)', () => {
+  beforeAll(async () => {
+    mongoContainer = await new MongoDBContainer("mongo:6.0").start();
+    process.env.MONGODB_URI = mongoContainer.getConnectionString() + "/?directConnection=true";
+    app = require('../../src/app');
+    server = app.default || app;
+  }, 60000);
+
+  afterAll(async () => {
+    await mongoose.disconnect();
+    if (mongoContainer) await mongoContainer.stop();
+  });
+
+  // Generated it() blocks...
+});
+```
+
+### 3. In-Memory Supertest Execution
+`supertest` binds directly to your exported Express/Connect app instance (`server = app.default || app`). It bypasses the operating system's network socket layer, avoiding port allocation conflicts and running tests with minimal overhead.
+
+### 4. Zero Vendor Lock-in
+The generated `.test.cjs` files are 100% standard JavaScript with zero runtime dependency on the Vantage CLI. You can commit them to Git, run them with `npx jest`, and maintain them as permanent regression tests in any standard CI pipeline:
+
+```bash
+npx jest __tests__/vantage/test-set-0.test.cjs
+```

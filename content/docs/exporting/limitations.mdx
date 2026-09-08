@@ -3,22 +3,32 @@ title: Exporting Limitations
 description: Understand the trade-offs of exporting to native test frameworks.
 ---
 
-Exporting your tests to Jest or Pytest guarantees you will never be locked into the Vantage ecosystem. However, doing so means you lose access to Vantage's powerful orchestration features.
+Exporting your tests to Jest or Pytest guarantees you will never be locked into the Vantage ecosystem. However, doing so means you lose access to some of Vantage's powerful orchestration features.
 
 Before migrating permanently to exported tests, consider the following limitations.
 
-## No Ephemeral Databases
+## 1. No Automatic Regex Auto-Masking
 
-When you run `vantage test`, Vantage uses Testcontainers to automatically spin up and tear down isolated PostgreSQL or MongoDB databases for every run. 
+Vantage's native test runner uses **Smart Regex Auto-Masking** to automatically find and ignore dynamic strings like UUIDs, JWT tokens, and ISO-8601 Timestamps, even if they aren't explicitly configured.
 
-Exported tests **do not** contain this Docker orchestration logic. You are responsible for manually spinning up a test database, ensuring it is clean, and passing the connection string to your application before running `jest` or `pytest`.
+**In Exported Tests:** 
+This dynamic Regex intelligence is lost. The exporters *will* automatically convert fields explicitly listed in your `noise.body_fields` configuration into asymmetric matchers (`expect.any(String)` for Jest, or `ANY_STR` for Pytest). However, if your API returns unconfigured volatile data (like a new dynamic UUID), you will have to manually configure it in `vantage.config.yaml` and re-export, or manually edit the generated code.
 
-## No Auto-Masking or Diffing
+## 2. Incomplete Database Orchestration (Testcontainers)
 
-Vantage's native test runner uses intelligent JSON diffing and Smart Auto-Masking to gracefully ignore dynamic fields like timestamps and UUIDs.
+When you run `vantage test`, Vantage's orchestrator automatically spins up and tears down isolated PostgreSQL or MongoDB databases for every run, mapped to dynamic ports.
 
-Exported code uses strict equality checks (e.g., `expect(response.body).toEqual(...)`). If your API returns dynamic data, you will have to manually edit the generated Jest/Pytest code to use wildcard matchers (like `expect.any(String)`).
+**In Exported Tests:** 
+- **Jest + MongoDB:** Supported! The Jest exporter will automatically inject `@testcontainers/mongodb` hooks into your test file.
+- **Jest + PostgreSQL / MySQL:** Not currently supported. You are responsible for manually spinning up the test database and passing the connection string.
+- **Pytest:** Testcontainers generation is not currently supported for Pytest exports. You must manually manage your database lifecycle.
 
-## No Watch Mode Teardown
+## 3. Stateful Database Seeding
 
-While tools like Jest have their own `--watch` modes, they don't know how to cleanly reset your external databases on every save. Vantage's native Watch Mode handles this database teardown implicitly.
+Vantage spins up an *empty* ephemeral container for every test run, so your test suite must be entirely self-contained (e.g., beginning with a `POST /signup` to seed the database). 
+
+If you export your tests and run them out of order (or run a single `it.only()` block in Jest without prior setup requests), the tests will fail because the required database state does not exist.
+
+## 4. No Watch Mode Teardown
+
+While tools like Jest have their own `--watch` modes, their execution lifecycle is different. Vantage's native Watch Mode dynamically tears down and recreates the ephemeral Docker containers on every single file change, ensuring 100% test isolation. Running exported tests in `jest --watch` may cause state pollution between hot reloads if you aren't carefully wiping the database in `beforeEach` hooks.

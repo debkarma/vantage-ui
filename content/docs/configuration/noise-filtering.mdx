@@ -1,29 +1,44 @@
 ---
 title: Noise Filtering
-description: Configure Vantage to ignore dynamic data like timestamps and IDs.
+description: Configure Vantage to ignore dynamic data like timestamps, IDs, and noisy headers.
 ---
 
-APIs frequently return dynamic data—like auto-generated IDs, timestamps, or request traces. If Vantage strictly compared these fields during replay, every test would fail immediately because a `createdAt` timestamp from yesterday will never match a `createdAt` timestamp generated today.
+APIs frequently return dynamic data—such as auto-generated IDs, timestamps, or request traces. If Vantage strictly compared these fields during replay, tests would fail simply because a `createdAt` timestamp from yesterday will never match a timestamp generated today.
 
-Vantage provides three mechanisms to filter out this "noise": **Header Noise**, **Body Field Noise**, and **Smart Auto-Masking**.
+Vantage provides multiple complementary mechanisms to eliminate this noise: **Header Filtering**, **Body Field Filtering**, **Smart Auto-Masking**, and **Recording Path Ignoring**.
 
-## Header Noise
+## Header Filtering
 
-The `noise.headers` array defines a list of HTTP headers that should be completely ignored during the diffing phase. Matching is always case-insensitive.
+The `noise.headers` array defines HTTP headers that are stripped from both expected and actual responses before running diff assertions. Matching is always case-insensitive.
 
 ```yaml
 noise:
   headers:
-    - date
-    - etag
-    - x-trace-id
+    - Date
+    - ETag
+    - X-Request-Id
+    - Content-Length
+    - Access-Control-Allow-Origin
+    - Vary
+    - X-Custom-Trace-Id
 ```
 
-By default, Vantage already ignores hop-by-hop headers and standard dynamic headers like `Date`. You only need to add custom proprietary headers here.
+Vantage defaults to ignoring:
+- `Date`
+- `ETag`
+- `X-Request-Id`
+- `Content-Length`
+- `Access-Control-Allow-Origin`
+- `Vary`
 
-## Body Field Noise
+> [!NOTE]
+> Specifying custom headers in `noise.headers` replaces the default list. Include the default headers alongside any proprietary headers if you wish to keep them ignored.
 
-The `noise.body_fields` array allows you to ignore specific keys within a JSON response body. It supports dot-notation for nested objects.
+During diffing, Vantage also performs a **subset comparison** on headers: only headers captured in the original recorded test case are asserted against the replay response.
+
+## Body Field Filtering
+
+The `noise.body_fields` array allows you to strip specific keys within JSON response bodies using dot-notation.
 
 ```yaml
 noise:
@@ -33,26 +48,57 @@ noise:
     - user.metadata.lastLogin
 ```
 
-If your API returns an array of objects, Vantage automatically applies the dot-notation filter to *every* object in that array. For example, `users.id` will ignore the `id` field for every user in the `users` array.
+### Array Support
+
+Vantage automatically traverses top-level arrays and arrays located at the parent segment of a key:
+- **Top-level arrays**: Specifying `id` will remove `id` from every object in an array payload like `[{ "id": 1, "name": "A" }]`.
+- **Nested arrays**: Specifying `users.id` will remove `id` from every object in `{ "users": [{ "id": 1 }, { "id": 2 }] }`.
 
 ## Smart Auto-Masking
 
-Configuring every single dynamic field manually can be exhausting. To solve this, Vantage ships with a feature called **Smart Auto-Masking**, which is enabled by default.
+Configuring every single dynamic field manually can be tedious. Vantage includes **Smart Auto-Masking**, enabled by default via `noise.smart_masking`.
 
-When Vantage records traffic, it analyzes the response bodies. If it detects a string that perfectly matches a known dynamic format, it replaces the raw string with a masking token.
+### In-Memory Replay Comparison
+
+Unlike systems that mutate recorded data on disk, **Vantage preserves raw response bodies in your recorded YAML test cases**.
+
+Smart Auto-Masking operates **in-memory during test diffing**:
+1. Before running `diffJson()`, the engine deep-clones both the recorded (expected) body and the live (actual) replay body.
+2. The engine scans both objects and normalizes matching string patterns into standard tokens.
+3. Because both the expected and actual bodies receive identical token replacements, dynamic values match without corrupting your original recorded fixtures.
 
 ### What gets masked?
 
-1. **UUIDs** (v1 through v5) are replaced with `<AUTO_MASKED_UUID>`
-2. **JSON Web Tokens (JWT)** are replaced with `<AUTO_MASKED_JWT>`
-3. **ISO-8601 Timestamps** are replaced with `<AUTO_MASKED_DATE>`
-
-Because this mask is applied *at recording time*, the YAML file saves the token. During test replay, Vantage applies the exact same regex mask to the actual response before diffing them. If the server returns a valid UUID, it becomes `<AUTO_MASKED_UUID>`, and the diff succeeds.
+| Target | Regex / Type Matched | Normalized Mask Token |
+|--------|----------------------|-----------------------|
+| **Timestamps** | ISO-8601 strings and `Date` instances | `<AUTO_MASKED_DATE>` |
+| **UUIDs** | UUID v1 through v5 (`8-4-4-4-12` hex) | `<AUTO_MASKED_UUID>` |
+| **JWTs** | `eyJ...` formatted JSON Web Tokens | `<AUTO_MASKED_JWT>` |
 
 ### Disabling Smart Masking
 
-If Smart Masking is accidentally masking data that you strictly want to assert against, you can disable it in your configuration:
+If Smart Auto-Masking normalizes values that you need to assert strictly, disable it under the `noise` section in `vantage.config.yaml`:
 
 ```yaml
-smart_masking: false
+noise:
+  smart_masking: false
 ```
+
+## Recording-Time Path Ignoring
+
+In addition to response diff filtering, Vantage can filter out unwanted traffic at the proxy layer so it never creates test files in the first place:
+
+```yaml
+noise:
+  ignore_paths:
+    - /_next/
+    - /__vite_ping
+    - .ico
+    - .css
+    - .js
+    - .png
+    - .svg
+```
+
+Any incoming proxy request matching these substrings or file patterns is forwarded to your target application but bypassed by the recorder.
+

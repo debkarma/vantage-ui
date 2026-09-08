@@ -1,90 +1,102 @@
 ---
 title: Quick Start (5 min)
-description: The fastest path from zero to a passing test suite.
+description: The fastest path from zero to a passing test suite without writing code.
 ---
 
-This guide will walk you through recording your first test case and replaying it against your local server. We'll use a standard Node.js Express application as an example.
+This guide will walk you through recording your first test case and replaying it against your local application using Vantage's zero-code reverse proxy.
 
-## 1. Setup the Sample App
+Because Vantage operates at the network level, it works out of the box with **any backend language or framework** (Express, FastAPI, Django, Go, Spring Boot, Rails, etc.) without altering a single line of your application code.
 
-First, make sure you have an Express app running, and that you've imported the Vantage SDK middleware. The middleware intercepts the raw traffic so Vantage can record it.
+## 1. Install Vantage
 
-Install Vantage into your project:
-
-```bash
-npm install -D vantage-cli
-```
-
-Then, inject the middleware into your Express `app.ts` (or `server.js`):
-
-```typescript
-// app.ts
-process.env.VANTAGE_MODE = process.env.VANTAGE_MODE || 'off';
-import express from 'express';
-import { vantageMiddleware } from 'vantage-cli/sdk';
-
-const app = express();
-app.use(express.json());
-
-// 1. Add Vantage Middleware (it only intercepts if VANTAGE_MODE=record)
-app.use(vantageMiddleware);
-
-// --- Your App Logic ---
-app.get('/api/users', (req, res) => {
-  res.json([{ id: 1, name: 'Alice' }]);
-});
-
-export default app;
-```
-
-> [!NOTE]
-> The middleware is a completely safe no-op in production. It only actively intercepts traffic when `process.env.VANTAGE_MODE` is explicitly set to `record`.
-
-## 2. Record Traffic
-
-To start recording, run the Vantage CLI in record mode. You can pass the `-c` flag to have Vantage automatically start your app server for you.
+Install the Vantage CLI globally or in your project:
 
 ```bash
-vantage record -c "npx ts-node app.ts" --port 6789
+npm install -g vantage-cli
 ```
 
-This starts the Vantage proxy on port `6789`, and boots your Express app (which likely runs on port `3000`).
+*(Alternatively, you can run commands directly using `npx vantage-cli`).*
 
-Now, open Postman, curl, or your browser, and make a request to the **Vantage Proxy Port** instead of your app port:
+## 2. Record Traffic (Zero Code)
+
+To start recording, run `vantage record` with the `--proxy` flag pointing to your application's port. You can use `-c` to have Vantage automatically boot your app for you:
+
+```bash
+vantage record -c "npx tsx server.ts" --proxy 3000
+```
+
+### What happens behind the scenes:
+1. Vantage spins up a transparent reverse proxy listening on port `6789`.
+2. It launches your application server (listening on port `3000`).
+3. It prepares a fresh test set (e.g. `.vantage/test-set-1/`).
+
+### Generate Some Traffic
+
+Now send requests to the **Vantage Proxy Port (6789)** instead of your application port. You can use curl, Postman, or your frontend client:
 
 ```bash
 curl http://localhost:6789/api/users
 ```
 
-You'll see a log in your terminal indicating that Vantage successfully intercepted and recorded the traffic. A new file will be created in your `.vantage/test-set-1/tests/` directory!
+The reverse proxy forwards the request to your application on port `3000`, relays the response back to your client, and saves the request/response pair:
 
-Press `q` in the terminal to stop the recording server.
+```text
+ ⚡ Vantage: INFO    Created test-set-1
+ ⚡ Vantage: INFO    Record server listening on port 6789...
+ ⚡ Vantage: INFO    Spawning target app: npx tsx server.ts
+ ⚡ Vantage: SUCCESS get-api-users-1  <- /api/users
+```
+
+Make as many requests as you want to simulate real user behavior. When you are done, press <kbd>q</kbd> in your terminal to stop recording.
 
 ## 3. Replay Tests
 
-Now that you've captured some real traffic, let's play it back to ensure the API behaves identically.
+Now that you've captured baseline traffic, replay it to verify your API behavior and catch regressions:
 
 ```bash
-vantage test -c "npx ts-node app.ts" --target http://127.0.0.1:3000
+vantage test -c "npx tsx server.ts" --target http://127.0.0.1:3000
 ```
 
 Vantage will:
-1. Start your server.
-2. Fire the recorded HTTP request at your server.
-3. Diff the actual response (status code, headers, and JSON body) against the expected recorded response.
-4. Output a success message.
+1. Boot your application server.
+2. Replay every captured request directly against your app (`http://127.0.0.1:3000`).
+3. Diff the actual response status, headers, and JSON body against the recorded baseline (automatically ignoring noise like timestamps and UUIDs).
+4. Output a summary report.
 
 ```text
- ♻️ REPLAYING TEST SET: test-set-1
+  _    __            __                  
+ | |  / /___ _____  / /_____ _____ ____  
+ | | / / __ `/ __ \/ __/ __ `/ __ `/ _ \ 
+ | |/ / /_/ / / / / /_/ /_/ / /_/ /  __/ 
+ |___/\__,_/_/ /_/\__/\__,_/\__, /\___/  
+                           /____/        
+                                         
+  version: 1.0.0-dev                     
+                                         
+ ▶ TEST MODE                             
+ Press 'q' to quit.                      
+                                         
+ ⚡ Vantage: INFO    Replaying test-set-1 (1 tests) against http://127.0.0.1:3000
+ ⚡ Vantage: INFO    Spawning target app: npx tsx server.ts
+ ⚡ Vantage: TEST    Running: get-api-users-1                                  
+ ⚡ Vantage: SUCCESS Report saved to: .vantage\reports\test-run-1\test-set-1-report.yaml
 
-   ✔ get-api-users-1 (12ms)
+   ✔ get-api-users-1 (14ms)
 
- --------------------------------------------------
- Results: 1 passed, 0 failed, 1 total (12ms)
+  <=========================================>
+   TESTRUN SUMMARY. For test-set: "latest"
+         Total tests:        1
+         Total test passed:  1
+         Total test failed:  0
+         Time Taken:         "0.12 s"
+  <=========================================>
 ```
 
 ## Congratulations!
 
-You just created and ran an end-to-end API test without writing a single line of assertion code. 
+You just recorded and replayed an end-to-end API test suite without modifying your application code or writing manual assertions.
 
-From here, you can dive into [How Vantage Works](/docs/getting-started/how-it-works) to understand the architecture, or configure database state isolation using [Testcontainers](/docs/configuration/testcontainers).
+### Next Steps
+- **[How Vantage Works](/docs/getting-started/how-it-works)**: Learn about the underlying architecture.
+- **[Testcontainers Isolation](/docs/configuration/testcontainers)**: Spin up ephemeral databases per test run for true determinism.
+- **[Export to Native Tests](/docs/exporting/export-to-jest)**: Eject into standard Jest or Pytest suites at any time.
