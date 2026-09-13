@@ -54,8 +54,8 @@ export function FeatureExport() {
           <br/>
           <div className="pl-8 text-[#3b82f6]">expect<span className="text-mist">(res.status).</span>toBe<span className="text-mist">(</span><span className="text-[#f59e0b]">200</span><span className="text-mist">);</span></div>
           <div className="pl-8 text-[#3b82f6]">expect<span className="text-mist">(res.body).</span>toEqual<span className="text-mist">([</span></div>
-          <div className="pl-12 text-mist">{'{'} id: <span className="text-[#f59e0b]">1</span>, title: <span className="text-pulse-green">'Learn Keploy'</span> {'}'},</div>
-          <div className="pl-12 text-mist">{'{'} id: <span className="text-[#f59e0b]">2</span>, title: <span className="text-pulse-green">'Build Vantage'</span> {'}'},</div>
+          <div className="pl-12 text-mist">{'{'} id: <span className="text-[#f59e0b]">1</span>, title: <span className="text-pulse-green">'Upgrade PostgreSQL database'</span> {'}'},</div>
+          <div className="pl-12 text-mist">{'{'} id: <span className="text-[#f59e0b]">2</span>, title: <span className="text-pulse-green">'Configure OAuth2 provider'</span> {'}'},</div>
           <div className="pl-8 text-mist">]);</div>
           <div className="pl-4 text-mist">{'}'});</div>
           <div className="text-mist">{'}'});</div>
