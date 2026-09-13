@@ -14,7 +14,7 @@ export const baseOptions: BaseLayoutProps = {
           alt="Vantage Logo" 
           width={120} 
           height={24} 
-          className="h-4 w-auto brightness-0 invert" 
+          className="h-6 w-auto brightness-0 invert" 
           priority 
         />
       </div>

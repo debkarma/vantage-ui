@@ -21,7 +21,7 @@ export function Navbar() {
               <img 
                 src="/logo.png" 
                 alt="Vantage" 
-                className="h-5 w-auto brightness-0 invert opacity-90" 
+                className="h-7 w-auto brightness-0 invert opacity-90" 
               />
             </Link>
           </div>

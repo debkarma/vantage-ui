@@ -6,7 +6,7 @@ export function Footer() {
           <img 
             src="/logo.png" 
             alt="Vantage" 
-            className="h-5 w-auto brightness-0 invert opacity-90" 
+            className="h-7 w-auto brightness-0 invert opacity-90" 
           />
         </div>
         <div className="flex items-center gap-6 text-caption text-ash">
